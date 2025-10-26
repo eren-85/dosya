@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
 import Backtest from './pages/Backtest';
 import Portfolio from './pages/Portfolio';
+import AdvancedChart from './pages/AdvancedChart';
 import Layout from './components/layout/Layout';
 
 const darkTheme = createTheme({
@@ -37,6 +38,7 @@ function App() {
             <Route path="/analysis" element={<Analysis />} />
             <Route path="/backtest" element={<Backtest />} />
             <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/advanced-chart" element={<AdvancedChart />} />
           </Routes>
         </Layout>
       </Router>

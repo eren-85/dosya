@@ -164,6 +164,189 @@ print(report["market_pulse"])
 ### Web Dashboard
 Tarayıcınızda açın: `http://localhost:3000`
 
+## 🎓 Öğrenme ve Eğitim Sistemleri
+
+### 📚 PDF RAG Sistemi
+
+Sistem, PDF dokümanlarından bilgi öğrenebilir ve analiz sırasında bu bilgileri kullanabilir.
+
+**PDF Klasörü Konumu**: `./data/knowledge/`
+
+PDF'leri eklemek için:
+```bash
+# PDF klasörünü oluşturun
+mkdir -p ./data/knowledge/
+
+# PDF'lerinizi bu klasöre kopyalayın
+cp your-trading-books.pdf ./data/knowledge/
+
+# PDF'leri sisteme yükleyin
+python -c "
+from backend.learning.pdf_rag import PDFLearningSystem
+rag = PDFLearningSystem()
+rag.ingest_pdf('./data/knowledge/your-trading-books.pdf', category='trading_strategies')
+"
+```
+
+### 🎯 Manuel Eğitim Sistemi
+
+Kendiniz pattern ve swing point'leri işaretleyerek sistemi manuel eğitebilirsiniz.
+
+```python
+from backend.learning.manual_training import ManualAnnotation
+import pandas as pd
+
+# Manuel annotation sistemi
+annotator = ManualAnnotation(annotations_dir="./data/annotations")
+
+# Swing high/low işaretleme
+annotator.annotate_swing_point(
+    symbol="BTCUSDT",
+    timeframe="1H",
+    swing_type="high",  # veya "low"
+    index=150,
+    price=68500.0,
+    timestamp="2024-01-15T10:00:00",
+    market_data={
+        'volume': 1234567,
+        'rsi_14': 78.5,
+        'open_interest': 25000000,
+        'net_longs': 60.5,
+        'net_shorts': 39.5,
+        'cvd': 5000000,
+        'funding_rate': 0.01,
+        'orderbook_imbalance': 1.2,
+        'exchange_netflow': -500,
+        'whale_tx_count': 15
+    }
+)
+
+# Pattern işaretleme
+annotator.annotate_pattern(
+    symbol="BTCUSDT",
+    timeframe="4H",
+    pattern_type="head_and_shoulders",
+    points=[
+        {'index': 100, 'price': 67000, 'timestamp': '2024-01-15T00:00:00'},
+        {'index': 120, 'price': 69000, 'timestamp': '2024-01-15T20:00:00'},
+        {'index': 140, 'price': 67500, 'timestamp': '2024-01-16T16:00:00'},
+    ],
+    metadata={'volume_surge': True, 'rsi_divergence': True}
+)
+
+# Training dataseti olarak dışa aktar
+annotator.export_training_dataset('./data/training/manual_annotations.json')
+```
+
+### 📊 Tarihsel Öğrenme (Historical Learning)
+
+Sistem, geçmiş tüm verileri tarayarak otomatik pattern tespiti ve öğrenme yapabilir:
+
+```python
+from backend.learning.historical_learning import HistoricalDataLearner
+from datetime import datetime
+
+# Tarihsel öğrenme sistemi
+learner = HistoricalDataLearner(
+    data_dir="./data/historical",
+    pattern_library_path="./data/patterns/library.json"
+)
+
+# All-time verileri tara ve öğren
+results = learner.scan_historical_data(
+    symbol="BTCUSDT",
+    timeframe="1H",
+    start_date=datetime(2020, 1, 1),
+    end_date=datetime(2024, 12, 31),
+    batch_size=1000  # Her seferde 1000 mum işle
+)
+
+print(f"✅ {results['patterns_detected']} pattern tespit edildi")
+print(f"✅ {results['swing_points_detected']} swing point bulundu")
+
+# Pattern kütüphanesini görüntüle
+library = learner.load_pattern_library()
+for pattern_type, stats in library.items():
+    print(f"{pattern_type}: {stats['count']} adet, başarı oranı: {stats['success_rate']:.2%}")
+```
+
+**Not**: Sistem, veri alamadığı kaynaklarda "N/A" göstererek veya o adımı atlayarak çalışmaya devam eder. API anahtarı olmasa bile çalışabilir.
+
+## 🎨 Gelişmiş Teknik Analiz (Advanced Chart)
+
+Sistem, profesyonel Smart Money kavramlarını ve gelişmiş teknik analiz araçlarını içerir:
+
+### 📊 Advanced Chart Sayfası
+
+`/advanced-chart` sayfasında aşağıdaki özellikleri görselleştirebilirsiniz:
+
+**Kill Zones** (UTC):
+- 🟦 Londra: 02:00 - 05:00
+- 🟦 New York: 13:00 - 16:00
+- 🟦 Asya: 20:00 - 02:00
+
+**Order Blocks**: Güçlü hareket öncesi son karşıt mum (institutional footprint)
+
+**Fair Value Gaps (FVG)**: Fiyat boşlukları (dengesizlik bölgeleri)
+
+**Harmonic Patterns**:
+- Gartley, Bat, Butterfly, Crab, Shark
+- Fibonacci oranlarıyla otomatik tespit
+
+**Divergences**:
+- RSI, MACD, Volume divergansları
+- Bullish/Bearish sinyaller
+
+**Support/Resistance**:
+- Yatay destek ve direnç seviyeleri
+- Dokunma sayısına göre güç hesabı
+
+**Trend Lines & Channels**:
+- Swing point'lerden otomatik trend çizgisi tespiti
+- Trend kanalları
+
+**Enhanced Fibonacci**:
+- 🟡 **Golden Zone 618**: 0.618 - 0.66 (yüksek olasılıklı dönüş bölgesi)
+- 🟡 **Golden Zone 382**: 0.34 - 0.382
+- 🟢 **OTE High**: 0.705 (Optimal Trade Entry)
+- 🟢 **OTE Low**: 0.295
+- Standart Fibonacci seviyeleri (0.236, 0.382, 0.5, 0.618, 0.786, 1.0)
+
+**Swing High/Low Detection**:
+- Otomatik swing point tespiti
+- Manuel eğitim için temel
+
+### Kullanım
+
+```python
+from backend.data.processors.advanced_analysis import AdvancedTechnicalAnalysis
+
+# DataFrame'inizi hazırlayın (OHLCV + indikatörler)
+analysis = AdvancedTechnicalAnalysis()
+
+# Swing point'leri tespit et
+swing_highs, swing_lows = analysis.detect_swing_points(df, left_bars=5, right_bars=5)
+
+# Enhanced Fibonacci hesapla
+fib_levels = analysis.calculate_enhanced_fibonacci(
+    swing_high=69000,
+    swing_low=65000,
+    direction='bullish'
+)
+
+# Harmonic pattern tespiti
+patterns = analysis.detect_harmonic_patterns(swing_highs, swing_lows, tolerance=0.05)
+
+# Divergence tespiti
+divergences = analysis.detect_divergences(df, indicator_col='rsi_14', lookback=14)
+
+# Support/Resistance seviyeleri
+levels = analysis.detect_support_resistance(df, window=20, min_touches=2)
+
+# Trend çizgileri
+trend_lines = analysis.detect_trend_lines(swing_highs, swing_lows, min_points=3)
+```
+
 ## 🧪 Testing
 
 ```bash
