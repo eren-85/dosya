@@ -382,7 +382,8 @@ class DeepLearningTrainer:
             batch_size=self.config.batch_size,
             shuffle=True,
             num_workers=self.compute.config.dl_num_workers,
-            pin_memory=self.device.type == 'cuda',
+            pin_memory=self.compute.config.dl_pin_memory if hasattr(self.compute.config, 'dl_pin_memory') else (self.device.type == 'cuda'),
+            persistent_workers=True if self.compute.config.dl_num_workers > 0 else False,
         )
 
         if X_val is not None and y_val is not None:
@@ -392,7 +393,8 @@ class DeepLearningTrainer:
                 batch_size=self.config.batch_size,
                 shuffle=False,
                 num_workers=self.compute.config.dl_num_workers,
-                pin_memory=self.device.type == 'cuda',
+                pin_memory=self.compute.config.dl_pin_memory if hasattr(self.compute.config, 'dl_pin_memory') else (self.device.type == 'cuda'),
+                persistent_workers=True if self.compute.config.dl_num_workers > 0 else False,
             )
         else:
             val_loader = None
@@ -406,6 +408,10 @@ class DeepLearningTrainer:
 
         # Training loop
         for epoch in range(self.config.epochs):
+            # Reset peak memory stats at start of epoch
+            if self.device.type == 'cuda' and epoch == 0:
+                self.compute.reset_peak_memory_stats()
+
             # Training phase
             self.model.train()
             train_loss = 0.0
@@ -496,11 +502,15 @@ class DeepLearningTrainer:
                 if (epoch + 1) % 10 == 0:
                     logger.info(f"   Epoch {epoch+1}/{self.config.epochs} | Train Loss: {train_loss:.6f}")
 
+            # Periodic cleanup (every 10 epochs)
+            if (epoch + 1) % 10 == 0 and self.device.type == 'cuda':
+                self.compute.optimize_memory()
+
         logger.info("✅ Training completed")
 
-        # Memory cleanup
+        # Final cleanup
         if self.device.type == 'cuda':
-            self.compute.optimize_memory()
+            self.compute.cleanup_after_training()
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -523,7 +533,8 @@ class DeepLearningTrainer:
             batch_size=self.config.batch_size,
             shuffle=False,
             num_workers=self.compute.config.dl_num_workers,
-            pin_memory=self.device.type == 'cuda',
+            pin_memory=self.compute.config.dl_pin_memory if hasattr(self.compute.config, 'dl_pin_memory') else (self.device.type == 'cuda'),
+            persistent_workers=False,  # Not needed for single inference
         )
 
         predictions = []

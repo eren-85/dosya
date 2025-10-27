@@ -28,7 +28,8 @@ class ComputeConfig:
     # Deep Learning (LSTM, Transformer)
     dl_device: str = 'cuda'
     dl_batch_size: int = 128  # Auto-calculated based on VRAM
-    dl_num_workers: int = 4
+    dl_num_workers: int = 2  # 2-4 optimal for Windows (spawn overhead)
+    dl_pin_memory: bool = True  # Faster host-to-device transfer (GPU only)
     dl_use_compile: bool = False  # torch.compile (optional, first iter slow)
 
     # Tree-based ML (XGBoost, LightGBM, CatBoost)
@@ -86,7 +87,9 @@ class ComputeManager:
         if self.has_gpu:
             self.gpu_name = torch.cuda.get_device_name(0)
             self.gpu_memory = torch.cuda.get_device_properties(0).total_memory
-            self.gpu_memory_gb = self.gpu_memory / (1024**3)
+            # Use GiB (binary) for consistency: 1 GiB = 1024^3 bytes
+            # Note: Marketing says "8 GB" but actual is 8 GiB = 8.59 GB
+            self.gpu_memory_gb = self.gpu_memory / (1024**3)  # GiB (binary)
             self.gpu_compute_capability = torch.cuda.get_device_capability(0)
 
         # Create config
@@ -249,7 +252,7 @@ class ComputeManager:
         if self.has_gpu:
             logger.info(f"\n🎮 GPU Information:")
             logger.info(f"   Name: {self.gpu_name}")
-            logger.info(f"   VRAM: {self.gpu_memory_gb:.1f} GB")
+            logger.info(f"   VRAM: {self.gpu_memory_gb:.1f} GiB")
             logger.info(f"   Compute Capability: {self.gpu_compute_capability[0]}.{self.gpu_compute_capability[1]}")
             logger.info(f"   CUDA Version: {torch.version.cuda}")
             logger.info(f"   cuDNN Version: {torch.backends.cudnn.version()}")
@@ -420,24 +423,60 @@ class ComputeManager:
 
     # ==================== Memory Management ====================
 
-    def optimize_memory(self):
-        """Optimize GPU memory usage"""
+    def optimize_memory(self, aggressive: bool = False):
+        """
+        Optimize GPU memory usage
+
+        Args:
+            aggressive: If True, also synchronize and collect garbage
+        """
         if self.has_gpu:
             torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            logger.debug("🧹 GPU memory cache cleared")
+            if aggressive:
+                torch.cuda.synchronize()
+                import gc
+                gc.collect()
+                logger.debug("🧹 GPU memory cache cleared (aggressive)")
+            else:
+                logger.debug("🧹 GPU memory cache cleared")
 
     def reset_peak_memory_stats(self):
-        """Reset peak memory statistics (useful per epoch)"""
+        """
+        Reset peak memory statistics
+
+        Call at start of each epoch to track per-epoch peak usage
+        """
         if self.has_gpu:
             torch.cuda.reset_peak_memory_stats()
+            logger.debug("📊 Peak memory stats reset")
+
+    def cleanup_after_training(self):
+        """
+        Comprehensive cleanup after training/large operation
+
+        Recommended usage:
+            - After each training epoch
+            - After large model forward/backward passes
+            - Before switching models
+        """
+        if self.has_gpu:
+            # Clear cache
+            torch.cuda.empty_cache()
+            # Synchronize
+            torch.cuda.synchronize()
+            # Python garbage collection
+            import gc
+            gc.collect()
+            # Reset peak stats for next operation
+            torch.cuda.reset_peak_memory_stats()
+            logger.debug("🧹 Comprehensive cleanup completed")
 
     def get_memory_stats(self) -> dict:
         """
         Get detailed GPU memory statistics
 
         Returns:
-            Dict with memory usage in GB and percentages
+            Dict with memory usage in GiB (binary) and percentages
         """
         if not self.has_gpu:
             return {}
@@ -448,26 +487,26 @@ class ComputeManager:
         total = self.gpu_memory_gb
 
         return {
-            'allocated_gb': round(allocated, 2),
-            'reserved_gb': round(reserved, 2),
-            'max_allocated_gb': round(max_allocated, 2),
-            'total_gb': round(total, 1),
-            'free_gb': round(total - allocated, 2),
+            'allocated_gib': round(allocated, 2),
+            'reserved_gib': round(reserved, 2),
+            'max_allocated_gib': round(max_allocated, 2),
+            'total_gib': round(total, 1),
+            'free_gib': round(total - allocated, 2),
             'utilization_percent': round((allocated / total) * 100, 1),
         }
 
-    def vram_usage_gb(self) -> Tuple[float, float]:
+    def vram_usage_gib(self) -> Tuple[float, float]:
         """
-        Get current VRAM usage
+        Get current VRAM usage in GiB (binary)
 
         Returns:
-            (used_gb, reserved_gb)
+            (used_gib, reserved_gib)
         """
         if not self.has_gpu:
             return (0.0, 0.0)
 
-        used = torch.cuda.memory_allocated(0) / 1e9
-        reserved = torch.cuda.memory_reserved(0) / 1e9
+        used = torch.cuda.memory_allocated(0) / (1024**3)
+        reserved = torch.cuda.memory_reserved(0) / (1024**3)
         return (round(used, 2), round(reserved, 2))
 
     def log_memory_stats(self):
@@ -477,10 +516,10 @@ class ComputeManager:
 
         stats = self.get_memory_stats()
         logger.info(f"\n📊 VRAM Usage:")
-        logger.info(f"   Allocated: {stats['allocated_gb']:.2f} GB / {stats['total_gb']:.1f} GB ({stats['utilization_percent']:.1f}%)")
-        logger.info(f"   Reserved: {stats['reserved_gb']:.2f} GB")
-        logger.info(f"   Peak: {stats['max_allocated_gb']:.2f} GB")
-        logger.info(f"   Free: {stats['free_gb']:.2f} GB")
+        logger.info(f"   Allocated: {stats['allocated_gib']:.2f} GiB / {stats['total_gib']:.1f} GiB ({stats['utilization_percent']:.1f}%)")
+        logger.info(f"   Reserved: {stats['reserved_gib']:.2f} GiB")
+        logger.info(f"   Peak: {stats['max_allocated_gib']:.2f} GiB")
+        logger.info(f"   Free: {stats['free_gib']:.2f} GiB")
 
 
 # ==================== Global Instance ====================
@@ -547,7 +586,9 @@ def test_gpu_setup():
         print(f"   Device Name: {torch.cuda.get_device_name(0)}")
 
         props = torch.cuda.get_device_properties(0)
-        print(f"   VRAM: {props.total_memory / 1e9:.1f} GB")
+        # Use GiB (binary) for consistency with ComputeManager
+        vram_gib = props.total_memory / (1024**3)
+        print(f"   VRAM: {vram_gib:.1f} GiB ({props.total_memory / 1e9:.1f} GB)")
         print(f"   Compute Capability: {props.major}.{props.minor}")
 
         # Test BF16 support
@@ -570,8 +611,8 @@ def test_gpu_setup():
         y = x @ x.T
 
         stats = compute.get_memory_stats()
-        print(f"   Test allocation: {stats['allocated_gb']:.2f} GB")
-        print(f"   Free VRAM: {stats['free_gb']:.2f} GB")
+        print(f"   Test allocation: {stats['allocated_gib']:.2f} GiB")
+        print(f"   Free VRAM: {stats['free_gib']:.2f} GiB")
 
         del x, y
         compute.optimize_memory()
