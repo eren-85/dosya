@@ -1,5 +1,5 @@
 # Sigma Analyst - AI Financial Analysis System
-# Updated: 2025-10 - Latest compatible versions
+# Updated: 2025-10 - Python 3.10-3.12 Compatible
 
 # === Web Framework ===
 fastapi==0.115.5
@@ -9,7 +9,7 @@ websockets==14.1
 
 # === Data Processing ===
 pandas==2.2.3
-numpy==1.26.4  # Using 1.26.x for better compatibility with scientific packages
+numpy==1.26.4
 scipy==1.14.1
 pyarrow==18.1.0
 
@@ -30,12 +30,14 @@ gymnasium==1.0.0
 tensorboard==2.18.0
 
 # === Time Series & Technical Analysis ===
-# Note: ta-lib requires system package installation first:
-# Ubuntu/Debian: sudo apt-get install ta-lib
-# MacOS: brew install ta-lib
-# Windows: Download from https://github.com/cgohlke/talib-build/releases
-ta-lib==0.5.1
-pandas-ta==0.3.14b0
+# TA-Lib - WINDOWS USERS: Download wheel from https://github.com/cgohlke/talib-build/releases
+# Then: pip install TA_Lib‑0.4.32‑cp312‑cp312‑win_amd64.whl
+# Linux/Mac: Install system package first (see below)
+ta-lib==0.5.1; sys_platform != 'win32'
+# Windows kullanıcıları için: yukarıdaki link'ten wheel dosyası indirip manuel kurulum
+
+# Pandas-ta - Updated to latest available version
+pandas-ta==0.4.71b0
 
 # === Crypto Exchange APIs ===
 ccxt==4.4.29
@@ -58,12 +60,12 @@ langchain==0.3.11
 langchain-community==0.3.11
 openai==1.55.3
 pypdf2==3.0.1
-anthropic==0.39.0  # Claude API
+anthropic==0.39.0
 
 # === Task Queue ===
 celery==5.4.0
 flower==2.0.1
-kombu==5.4.2  # Celery dependency, explicit version
+kombu==5.4.2
 
 # === Monitoring & Logging ===
 prometheus-client==0.21.0
