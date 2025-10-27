@@ -382,7 +382,7 @@ class DeepLearningTrainer:
             batch_size=self.config.batch_size,
             shuffle=True,
             num_workers=self.compute.config.dl_num_workers,
-            pin_memory=self.compute.config.dl_pin_memory if hasattr(self.compute.config, 'dl_pin_memory') else (self.device.type == 'cuda'),
+            pin_memory=(self.device.type == 'cuda'),
             persistent_workers=True if self.compute.config.dl_num_workers > 0 else False,
         )
 
@@ -393,7 +393,7 @@ class DeepLearningTrainer:
                 batch_size=self.config.batch_size,
                 shuffle=False,
                 num_workers=self.compute.config.dl_num_workers,
-                pin_memory=self.compute.config.dl_pin_memory if hasattr(self.compute.config, 'dl_pin_memory') else (self.device.type == 'cuda'),
+                pin_memory=(self.device.type == 'cuda'),
                 persistent_workers=True if self.compute.config.dl_num_workers > 0 else False,
             )
         else:
@@ -533,7 +533,7 @@ class DeepLearningTrainer:
             batch_size=self.config.batch_size,
             shuffle=False,
             num_workers=self.compute.config.dl_num_workers,
-            pin_memory=self.compute.config.dl_pin_memory if hasattr(self.compute.config, 'dl_pin_memory') else (self.device.type == 'cuda'),
+            pin_memory=(self.device.type == 'cuda'),
             persistent_workers=False,  # Not needed for single inference
         )
 

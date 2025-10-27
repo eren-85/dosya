@@ -29,7 +29,7 @@ class ComputeConfig:
     dl_device: str = 'cuda'
     dl_batch_size: int = 128  # Auto-calculated based on VRAM
     dl_num_workers: int = 2  # 2-4 optimal for Windows (spawn overhead)
-    dl_pin_memory: bool = True  # Faster host-to-device transfer (GPU only)
+    # Note: pin_memory should be set dynamically in DataLoader (True if cuda, False if cpu)
     dl_use_compile: bool = False  # torch.compile (optional, first iter slow)
 
     # Tree-based ML (XGBoost, LightGBM, CatBoost)
