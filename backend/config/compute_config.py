@@ -29,6 +29,7 @@ class ComputeConfig:
     dl_device: str = 'cuda'
     dl_batch_size: int = 128  # Auto-calculated based on VRAM
     dl_num_workers: int = 4
+    dl_use_compile: bool = False  # torch.compile (optional, first iter slow)
 
     # Tree-based ML (XGBoost, LightGBM, CatBoost)
     ml_device: str = 'cpu'  # CPU faster for small-medium datasets
@@ -38,6 +39,7 @@ class ComputeConfig:
     # Reinforcement Learning (PPO, Decision Transformer)
     rl_device: str = 'cuda'
     rl_n_envs: int = 8
+    rl_cpu_threads: int = 1  # Set torch.set_num_threads(1) for RL (Windows subprocess compatibility)
 
     # Technical Analysis (pandas-ta, TA-Lib)
     ta_device: str = 'cpu'
@@ -233,6 +235,11 @@ class ComputeManager:
         # Disable cuDNN deterministic (faster training)
         torch.backends.cudnn.deterministic = False
 
+        # RL-specific: Set CPU threads to 1 (Windows SubprocVecEnv compatibility)
+        if self.config.rl_device == 'cuda' and self.config.rl_cpu_threads == 1:
+            torch.set_num_threads(1)
+            logger.info("✅ torch.set_num_threads(1) for RL (Windows subprocess compatibility)")
+
     def _log_setup(self):
         """Log compute configuration"""
         logger.info(f"\n{'='*60}")
@@ -360,38 +367,39 @@ class ComputeManager:
         """
         Get LightGBM device parameters
 
-        Note: LightGBM GPU support on Windows can be tricky.
-        Recommend CPU for stability unless dataset is very large.
+        Note: LightGBM GPU is NOT available via pip on Windows.
+        Requires conda or manual compilation.
+        Always use CPU for Windows stability.
+        """
+        # Windows pip LightGBM is CPU-only
+        # GPU requires: conda install -c conda-forge lightgbm
+        return {
+            'device': 'cpu',
+            'n_jobs': self.config.ml_n_jobs,
+        }
+
+    def get_catboost_params(self, n_samples: int = 0, safe_mode: bool = True) -> dict:
+        """
+        Get CatBoost device parameters
+
+        Args:
+            n_samples: Number of training samples
+            safe_mode: If True, use CPU-only (recommended for Windows)
+                      If False, try GPU (may fail on some Windows systems)
+
+        Note: CatBoost GPU on Windows can have dependency issues.
+        Use safe_mode=True (default) for stability.
         """
         use_gpu = (
+            not safe_mode and  # Respect safe mode
             self.config.ml_device == 'cuda' and
             n_samples > self.config.ml_auto_gpu_threshold and
             self.has_gpu
         )
 
         if use_gpu:
-            logger.info(f"📊 LightGBM: Using GPU (n_samples={n_samples:,})")
-            return {
-                'device': 'gpu',
-                'gpu_platform_id': 0,
-                'gpu_device_id': 0,
-            }
-        else:
-            return {
-                'device': 'cpu',
-                'n_jobs': self.config.ml_n_jobs,
-            }
-
-    def get_catboost_params(self, n_samples: int = 0) -> dict:
-        """Get CatBoost device parameters"""
-        use_gpu = (
-            self.config.ml_device == 'cuda' and
-            n_samples > self.config.ml_auto_gpu_threshold and
-            self.has_gpu
-        )
-
-        if use_gpu:
-            logger.info(f"📊 CatBoost: Using GPU (n_samples={n_samples:,})")
+            logger.info(f"📊 CatBoost: Trying GPU (n_samples={n_samples:,})")
+            logger.warning("   ⚠️  CatBoost GPU may fail on Windows. Set safe_mode=True if issues occur.")
             return {
                 'task_type': 'GPU',
                 'devices': '0',
@@ -586,6 +594,38 @@ def test_gpu_setup():
         print(f"   ✅ Mixed precision test passed")
 
         del model, x, y
+        compute.optimize_memory()
+    else:
+        print("   ⏭️  Skipped (no GPU)")
+
+    print("\n5️⃣  Matmul Benchmark (TF32):")
+    if torch.cuda.is_available():
+        import time
+
+        # Warm-up
+        a = torch.randn(1024, 1024, device='cuda')
+        b = torch.randn(1024, 1024, device='cuda')
+        _ = a @ b
+        torch.cuda.synchronize()
+
+        # Benchmark
+        a = torch.randn(4096, 4096, device='cuda')
+        b = torch.randn(4096, 4096, device='cuda')
+        torch.cuda.synchronize()
+        t0 = time.time()
+        c = a @ b
+        torch.cuda.synchronize()
+        elapsed_ms = (time.time() - t0) * 1e3
+
+        print(f"   4096x4096 matmul: {elapsed_ms:.1f} ms")
+        if elapsed_ms < 100:
+            print(f"   ✅ TF32 working (fast)")
+        elif elapsed_ms < 200:
+            print(f"   ⚠️  Slower than expected (check TF32)")
+        else:
+            print(f"   ❌ Very slow (TF32 may not be enabled)")
+
+        del a, b, c
         compute.optimize_memory()
     else:
         print("   ⏭️  Skipped (no GPU)")

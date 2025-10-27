@@ -154,8 +154,9 @@ class EnsembleModel:
         return model
 
     def _create_catboost(self):
-        """Create CatBoost model with GPU support"""
-        device_params = self.compute.get_catboost_params()
+        """Create CatBoost model with GPU support (safe mode for Windows)"""
+        # Use safe_mode=True (CPU-only) for Windows stability
+        device_params = self.compute.get_catboost_params(safe_mode=True)
 
         base_params = {
             'depth': 7,
