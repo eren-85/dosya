@@ -417,8 +417,8 @@ class DeepLearningTrainer:
             train_loss = 0.0
 
             for batch_X, batch_y in train_loader:
-                batch_X = batch_X.to(self.device)
-                batch_y = batch_y.to(self.device).unsqueeze(1)
+                batch_X = batch_X.to(self.device, non_blocking=(self.device.type == 'cuda'))
+                batch_y = batch_y.to(self.device, non_blocking=(self.device.type == 'cuda')).unsqueeze(1)
 
                 self.optimizer.zero_grad()
 
@@ -461,8 +461,8 @@ class DeepLearningTrainer:
 
                 with torch.no_grad():
                     for batch_X, batch_y in val_loader:
-                        batch_X = batch_X.to(self.device)
-                        batch_y = batch_y.to(self.device).unsqueeze(1)
+                        batch_X = batch_X.to(self.device, non_blocking=(self.device.type == 'cuda'))
+                        batch_y = batch_y.to(self.device, non_blocking=(self.device.type == 'cuda')).unsqueeze(1)
 
                         if self.use_amp:
                             with torch.autocast(device_type='cuda', dtype=self.amp_dtype):
@@ -541,7 +541,7 @@ class DeepLearningTrainer:
 
         with torch.no_grad():
             for batch_X, _ in loader:
-                batch_X = batch_X.to(self.device)
+                batch_X = batch_X.to(self.device, non_blocking=(self.device.type == 'cuda'))
 
                 if self.use_amp:
                     with torch.autocast(device_type='cuda', dtype=self.amp_dtype):
