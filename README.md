@@ -74,10 +74,91 @@
 ## 🚀 Kurulum
 
 ### Gereksinimler
-- Python 3.10+
-- PostgreSQL 14+ (TimescaleDB extension)
-- Redis 7+
-- Docker & Docker Compose (opsiyonel)
+- **Docker Desktop** (önerilen) - Tek kurulum, tüm bağımlılıklar dahil
+- VEYA Python 3.10+ + PostgreSQL 14+ + Redis 7+ (manuel kurulum)
+- RTX 4060 8GB (GPU eğitimi için opsiyonel, CPU'da da çalışır)
+
+---
+
+## 🐳 Kurulum Yöntem 1: Docker (ÖNERİLEN) ⭐
+
+**Avantajları:**
+- ✅ 3 adımda kurulum
+- ✅ Tüm bağımlılıklar otomatik
+- ✅ Windows/Mac/Linux uyumlu
+- ✅ Temiz, izole ortam
+
+### Adım 1: Docker Desktop Kurun
+
+**Windows:**
+```powershell
+winget install -e --id Docker.DockerDesktop
+```
+
+**Mac:**
+```bash
+brew install --cask docker
+```
+
+**Linux:**
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+```
+
+Docker Desktop'ı başlatın ve çalıştığını doğrulayın:
+```powershell
+docker --version
+# Docker version 27.x.x, build xxxxx
+```
+
+### Adım 2: Proje Klasörüne Gidin ve .env Oluşturun
+
+```powershell
+# Proje klasörüne gidin
+cd D:\3\dosya
+
+# .env dosyasını oluşturun
+Copy-Item .env.example .env
+
+# .env dosyasını düzenleyin (en az Anthropic API key gerekli)
+notepad .env
+```
+
+**Minimum .env ayarları:**
+```env
+POSTGRES_PASSWORD=GucluSifreniz123!
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxx
+```
+
+### Adım 3: Başlatın! 🚀
+
+```powershell
+docker-compose up -d --build
+```
+
+**İlk çalıştırmada 10-15 dakika sürer (paketler indiriliyor).**
+
+**API test:**
+```
+http://localhost:8000/docs
+```
+
+**Celery monitoring:**
+```
+http://localhost:5555
+```
+
+✅ **Sistem hazır!**
+
+**📖 Detaylı rehber:** [DOCKER_SETUP_GUIDE.md](DOCKER_SETUP_GUIDE.md) - Hiç bilmeyen birine anlatır gibi tüm adımlar
+
+---
+
+## 💻 Kurulum Yöntem 2: Manuel (Python + PostgreSQL)
+
+<details>
+<summary>Manuel kurulum adımları (tıklayın)</summary>
 
 ### 1. Repository'yi Klonlayın
 ```bash
@@ -131,6 +212,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+</details>
 
 ## 📖 Kullanım
 
