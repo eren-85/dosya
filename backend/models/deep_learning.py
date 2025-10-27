@@ -234,7 +234,8 @@ class DeepLearningTrainer:
     Trainer for deep learning models with GPU acceleration
 
     Features:
-        - Mixed precision training (FP16)
+        - Mixed precision training (BF16/FP16)
+        - TF32 optimization for RTX 30xx/40xx
         - Early stopping
         - Learning rate scheduling
         - Gradient clipping
@@ -264,17 +265,29 @@ class DeepLearningTrainer:
         if hasattr(self.compute.config, 'dl_batch_size'):
             self.config.batch_size = self.compute.config.dl_batch_size
 
+        # Mixed precision settings
         self.use_amp = self.compute.config.use_mixed_precision and self.device.type == 'cuda'
+        self.amp_dtype = self.compute.amp_dtype() if self.use_amp else None
+
+        # GradScaler only for FP16 (not needed for BF16)
+        self.scaler = None
+        if self.use_amp:
+            if self.amp_dtype == torch.float16:
+                self.scaler = torch.cuda.amp.GradScaler()
+            # BF16 doesn't need GradScaler (better numeric stability)
 
         logger.info(f"🚀 Deep Learning Trainer ({model_type.upper()})")
         logger.info(f"   Device: {self.device}")
         logger.info(f"   Batch Size: {self.config.batch_size}")
-        logger.info(f"   Mixed Precision (FP16): {self.use_amp}")
+        if self.use_amp:
+            dtype_name = "BF16" if self.amp_dtype == torch.bfloat16 else "FP16"
+            logger.info(f"   Mixed Precision: {dtype_name}")
+        else:
+            logger.info(f"   Mixed Precision: Disabled")
 
         self.model = None
         self.optimizer = None
         self.scheduler = None
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
 
         self.train_losses = []
         self.val_losses = []
@@ -405,16 +418,23 @@ class DeepLearningTrainer:
 
                 # Mixed precision forward pass
                 if self.use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.autocast(device_type='cuda', dtype=self.amp_dtype):
                         outputs = self.model(batch_X)
                         loss = criterion(outputs, batch_y)
 
-                    # Backward pass with gradient scaling
-                    self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
+                    # Backward pass
+                    if self.scaler is not None:
+                        # FP16: use GradScaler
+                        self.scaler.scale(loss).backward()
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                    else:
+                        # BF16: no scaler needed (better numeric stability)
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                        self.optimizer.step()
                 else:
                     # Standard forward/backward
                     outputs = self.model(batch_X)
@@ -439,7 +459,7 @@ class DeepLearningTrainer:
                         batch_y = batch_y.to(self.device).unsqueeze(1)
 
                         if self.use_amp:
-                            with torch.cuda.amp.autocast():
+                            with torch.autocast(device_type='cuda', dtype=self.amp_dtype):
                                 outputs = self.model(batch_X)
                                 loss = criterion(outputs, batch_y)
                         else:
@@ -513,7 +533,7 @@ class DeepLearningTrainer:
                 batch_X = batch_X.to(self.device)
 
                 if self.use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.autocast(device_type='cuda', dtype=self.amp_dtype):
                         outputs = self.model(batch_X)
                 else:
                     outputs = self.model(batch_X)

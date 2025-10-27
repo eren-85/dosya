@@ -20,7 +20,16 @@ scikit-learn==1.5.2
 xgboost==2.1.2
 lightgbm==4.5.0
 catboost==1.2.8        # NumPy 2 support
+
+# PyTorch with CUDA support (for RTX 4060)
+# IMPORTANT: Install PyTorch with CUDA toolkit first:
+# pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision torchaudio
+# Or for CUDA 12.1:
+# pip install --index-url https://download.pytorch.org/whl/cu121 torch==2.5.1 torchvision torchaudio
+# Then verify: python -c "import torch; print(torch.cuda.is_available())"
 torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 transformers==4.46.3
 accelerate==1.1.1
 
