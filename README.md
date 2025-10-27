@@ -191,13 +191,14 @@ cp .env.example .env
 # .env dosyasını düzenleyin
 ```
 
-### 5. Veritabanı Kurulumu
+### 5. Veritabanı Kurulumu (opsiyonel)
 ```bash
-# PostgreSQL + TimescaleDB
+# PostgreSQL + TimescaleDB + Redis
 docker-compose up -d postgres redis
 
-# Migration
-alembic upgrade head
+# Not: Şu anda veriler dosya sisteminde saklanıyor (CSV/Parquet)
+# PostgreSQL ileride time-series data için kullanılacak
+# Redis Celery task queue için kullanılıyor
 ```
 
 ### 6. Backend'i Başlatın

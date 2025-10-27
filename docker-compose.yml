@@ -1,7 +1,9 @@
 version: '3.8'
 
 services:
-  # PostgreSQL + TimescaleDB
+  # PostgreSQL + TimescaleDB (optional - not used yet, reserved for future time-series storage)
+  # Currently using file-based storage (CSV/Parquet in ./data directory)
+  # You can comment out this service if you don't need it
   postgres:
     image: timescale/timescaledb:latest-pg15
     container_name: sigma_postgres
@@ -15,6 +17,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - sigma_network
+    profiles:
+      - full  # Only start with: docker-compose --profile full up
 
   # Redis
   redis:
@@ -42,8 +46,7 @@ services:
       - ./backend:/app/backend
       - ./data:/app/data
     depends_on:
-      - postgres
-      - redis
+      - redis  # PostgreSQL removed - not used yet (file-based storage)
     networks:
       - sigma_network
     command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -60,7 +63,6 @@ services:
       - ./backend:/app/backend
       - ./data:/app/data
     depends_on:
-      - postgres
       - redis
       - backend
     networks:
@@ -79,7 +81,6 @@ services:
       - ./backend:/app/backend
       - ./data:/app/data
     depends_on:
-      - postgres
       - redis
       - backend
     networks:
