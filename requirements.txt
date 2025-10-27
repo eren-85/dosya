@@ -1,58 +1,49 @@
 # Sigma Analyst - AI Financial Analysis System
-# Updated: 2025-10 - Python 3.10-3.12 Compatible
-# NumPy 1.x ecosystem (avoiding NumPy 2.x conflicts)
+# Updated: 2025-10 - Python 3.12 with NumPy 2.x ecosystem
+# Successfully tested on Windows with Python 3.12.3
 
-# -------------------------
-# Core web
+# ===== CORE WEB =====
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 python-multipart==0.0.17
 websockets==14.1
 
-# -------------------------
-# Numeric & data stack (NumPy 1.x line)
-numpy==1.26.4
-pandas==2.2.3
+# ===== NUMERIC / DATA =====
+# NumPy 2.x ecosystem (modern, performant)
+numpy==2.2.6
+pandas==2.3.3
 scipy==1.14.1
 pyarrow==18.1.0
 
-# -------------------------
-# ML
+# ===== ML =====
 scikit-learn==1.5.2
 xgboost==2.1.2
 lightgbm==4.5.0
-catboost==1.2.7
+catboost==1.2.8        # NumPy 2 support
 torch==2.5.1
 transformers==4.46.3
 accelerate==1.1.1
 
-# -------------------------
-# RL
-stable-baselines3==2.4.0
+# ===== RL =====
+stable-baselines3==2.5.0  # NumPy 2 support
 gymnasium==1.0.0
 tensorboard==2.18.0
 
-# -------------------------
-# Technical Analysis
-# Using pandas-ta-classic instead of pandas-ta (NumPy 1.x compatible)
-pandas-ta-classic==0.3.36
-
-# TA-Lib: Windows users need binary wheel
-# Download from: https://github.com/cgohlke/talib-build/releases
-# Python 3.12: pip install TA_Lib-0.4.32-cp312-cp312-win_amd64.whl
+# ===== TECHNICAL ANALYSIS =====
+pandas-ta==0.4.71b0       # Requires NumPy >= 2.2.6
+# TA-Lib for Windows: Download wheel from https://github.com/cgohlke/talib-build/releases
+# Python 3.12: pip install ta_lib-0.6.8-cp312-cp312-win_amd64.whl
 # Then uncomment below:
-# ta-lib==0.5.1
+# ta-lib==0.6.8
 
-# -------------------------
-# Exchanges / I/O
+# ===== EXCHANGES / I/O =====
 ccxt==4.4.29
 python-binance==1.0.22
 requests==2.32.3
 aiohttp==3.11.10
 websocket-client==1.8.0
 
-# -------------------------
-# Storage / DB / Queue
+# ===== STORAGE / DB / QUEUE =====
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 redis==5.2.0
@@ -61,8 +52,7 @@ celery==5.4.0
 flower==2.0.1
 kombu==5.4.2
 
-# -------------------------
-# LLM tools
+# ===== LLM / INTEGRATION =====
 openai==1.55.3
 anthropic==0.39.0
 pinecone-client==5.0.1
@@ -70,8 +60,7 @@ langchain==0.3.11
 langchain-community==0.3.11
 pypdf2==3.0.1
 
-# -------------------------
-# Config / utils
+# ===== CONFIG / UTILS =====
 python-dotenv==1.0.1
 pydantic==2.10.3
 pydantic-settings==2.6.1
@@ -82,8 +71,7 @@ click==8.1.7
 pytz==2024.2
 httpx==0.28.1
 
-# -------------------------
-# Dev / test
+# ===== DEV / TEST =====
 pytest==8.3.4
 pytest-asyncio==0.24.0
 pytest-cov==6.0.0
