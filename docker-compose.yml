@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL + TimescaleDB (optional - not used yet, reserved for future time-series storage)
   # Currently using file-based storage (CSV/Parquet in ./data directory)
