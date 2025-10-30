@@ -1,47 +1,62 @@
-"""
-FastAPI main application
-"""
+# backend/api/main.py
+from __future__ import annotations
 
+import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from ..core.config import settings
+
+log = logging.getLogger("sigma.api")
 
 app = FastAPI(
     title="Sigma Analyst API",
-    description="AI-powered Crypto Market Analysis System",
-    version="0.1.0"
+    version="1.0.0",
+    # root_path tanımlamıyoruz; reverse proxy varsa uvicorn --root-path ile verilmeli
 )
 
-# CORS
+# CORS (gerekirse domainlerini ekle)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=["*"],  # prod'da daralt
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --- Health/Ready --------------------------------------------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
+@app.get("/ready")
+def ready():
+    # burada gerekirse Redis/DB ping eklenebilir
+    return {"status": "ready"}
+
+# --- Routers -------------------------------------------------------------------
+# ops router
+try:
+    from .routes import ops as ops_router  # type: ignore
+    app.include_router(ops_router.router)
+    log.info("Router mounted: ops -> /api/ops/*")
+except Exception as e:
+    log.exception("Failed to mount ops router: %s", e)
+
+# analysis router (varsayılsa da yoksa sessizce geç)
+try:
+    from .routes import analysis as analysis_router  # type: ignore
+    app.include_router(analysis_router.router)
+    log.info("Router mounted: analysis")
+except Exception:
+    pass
+
+# Root bilgi
 @app.get("/")
-async def root():
+def root():
     return {
         "name": "Sigma Analyst API",
-        "version": "0.1.0",
-        "status": "operational"
+        "docs": "/docs",
+        "health": "/health",
+        "ready": "/ready",
+        "ops": "/api/ops/ping",
     }
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": "2025-10-26T22:00:00Z"
-    }
-
-
-# TODO: Add routers
-# from .routers import analysis, backtest, data
-# app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
-# app.include_router(backtest.router, prefix="/api/backtest", tags=["backtest"])
-# app.include_router(data.router, prefix="/api/data", tags=["data"])

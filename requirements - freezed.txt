@@ -1,0 +1,73 @@
+# ===== CORE WEB =====
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+websockets==14.1
+
+# ===== NUMERIC / DATA =====
+numpy==2.2.6         # SciPy 1.14.1 <2.3 istediği için 2.2.6 pinli
+pandas==2.3.3
+scipy==1.14.1
+pyarrow==18.1.0
+
+# ===== ML =====
+scikit-learn==1.5.2
+xgboost==2.1.2
+lightgbm==4.5.0
+catboost==1.2.8        # NumPy 2 desteği
+torch==2.5.1
+transformers==4.46.3
+accelerate==1.1.1
+
+# ===== RL =====
+stable-baselines3==2.5.0  # NumPy 2 desteği
+gymnasium==1.0.0
+tensorboard==2.18.0
+
+# ===== TECHNICAL ANALYSIS =====
+pandas-ta==0.4.71b0    # NumPy >= 2.2.6 gerektirir
+ta-lib==0.6.8 ; platform_system == "Windows"
+
+# ===== EXCHANGES / I/O =====
+ccxt==4.4.29
+python-binance==1.0.22
+requests==2.32.3
+aiohttp==3.11.10
+websocket-client==1.8.0
+
+# ===== STORAGE / DB / QUEUE =====
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+redis==5.2.0
+asyncpg==0.30.0
+celery==5.4.0
+flower==2.0.1
+kombu==5.4.2
+
+# ===== LLM / INTEGRATION =====
+openai==1.55.3
+anthropic==0.39.0
+pinecone-client==5.0.1
+langchain==0.3.11
+langchain-community==0.3.11
+pypdf2==3.0.1
+
+# ===== CONFIG / UTILS =====
+python-dotenv==1.0.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+pyyaml==6.0.2
+python-json-logger==3.2.1
+click==8.1.7
+pytz==2024.2
+httpx==0.28.1
+typing-extensions==4.15.0
+
+# ===== DEV / TEST =====
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+black==24.10.0
+isort==5.13.2
+flake8==7.1.1
+mypy==1.13.0

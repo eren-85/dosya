@@ -1,0 +1,41 @@
+TRADING PSYCHOLOGY - KEY CONCEPTS
+
+=== FEAR & GREED ===
+When Fear & Greed Index shows extreme greed (>75), the market is often
+near a local top. This is when retail investors are most bullish and 
+professional traders start taking profits.
+
+Extreme fear (<25) often marks bottoms. When everyone is panicking,
+that's when the best opportunities appear.
+
+=== RSI AND PSYCHOLOGY ===
+RSI above 70 combined with extreme greed is a warning sign. The market
+is overbought and overleveraged. Wait for a pullback.
+
+RSI below 30 with extreme fear suggests oversold conditions and potential
+reversal. However, in strong downtrends, RSI can stay low for extended periods.
+
+=== MARK DOUGLAS - TRADING IN THE ZONE ===
+"The market's job is to extract money from the majority. If everyone expects
+the market to go up, it will likely do the opposite."
+
+"Trade probabilities, not predictions. No single trade matters."
+
+=== WHALE BEHAVIOR ===
+When large holders (whales) are accumulating while retail is fearful,
+it's a strong buy signal. When whales distribute during euphoria, be cautious.
+
+High volume combined with price increase suggests institutional buying.
+High volume with price decrease suggests distribution.
+
+=== FOMO (Fear Of Missing Out) ===
+FOMO typically appears near tops. When your friends start asking about crypto,
+when news is extremely bullish, when social media is euphoric - these are
+warning signs, not entry signals.
+
+The best entries happen when nobody is talking about crypto.
+
+=== RISK MANAGEMENT ===
+Never risk more than 2% of your capital on a single trade.
+Always use stop losses.
+Position sizing is more important than entry timing.
