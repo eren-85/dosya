@@ -33,6 +33,20 @@ class SyncReq(BaseModel):
 class TrainReq(BaseModel):
     symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT", "ETHUSDT", "XRPUSDT"]])
     timeframes: str = Field(..., examples=["1h,4h,1d"])  # CLI beklediği biçimde
+    model_type: str = Field("ensemble", examples=["ensemble", "lstm", "transformer", "ppo"])
+    epochs: int = Field(100, ge=1, le=1000, examples=[100])
+    device: str = Field("cpu", pattern="^(cpu|cuda)$", examples=["cuda"])
+
+
+class BacktestReq(BaseModel):
+    strategy: str = Field(..., examples=["trend_following"])
+    symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT"]])
+    timeframe: str = Field(..., examples=["1h"])
+    start_date: str = Field(..., examples=["2023-01-01"])
+    end_date: str = Field(..., examples=["2024-01-01"])
+    initial_capital: float = Field(10000.0, gt=0, examples=[10000.0])
+    position_size_pct: float = Field(10.0, gt=0, le=100, examples=[10.0])
+    commission_pct: float = Field(0.1, ge=0, le=5, examples=[0.1])
 
 
 class OneShotReq(BaseModel):
@@ -107,6 +121,13 @@ def train(req: TrainReq):
         "-s", ",".join(req.symbols),
         "-t", req.timeframes,
     ]
+    # Model type ve epochs parametreleri (CLI destekliyorsa)
+    if hasattr(req, 'model_type') and req.model_type:
+        args.extend(["--model-type", req.model_type])
+    if hasattr(req, 'epochs') and req.epochs:
+        args.extend(["--epochs", str(req.epochs)])
+    if hasattr(req, 'device') and req.device:
+        args.extend(["--device", req.device])
     return _run(args)
 
 
@@ -123,3 +144,58 @@ def oneshot(req: OneShotReq):
         "--timeout", str(req.timeout),
     ]
     return _run(args)
+
+
+@router.post("/backtest")
+def backtest(req: BacktestReq):
+    """
+    Backtest a trading strategy on historical data.
+
+    Returns mock results for now. Real backtest engine will be implemented.
+    """
+    # TODO: Gerçek backtest engine eklenecek
+    # Şimdilik mock data dönüyoruz ki UI test edilebilsin
+
+    import random
+    from datetime import datetime
+
+    # Mock backtest results
+    total_return = random.uniform(-20, 80)
+    sharpe_ratio = random.uniform(0.5, 3.0)
+    max_drawdown = random.uniform(-25, -5)
+    total_trades = random.randint(50, 200)
+    winning_trades = int(total_trades * random.uniform(0.45, 0.65))
+    losing_trades = total_trades - winning_trades
+    win_rate = (winning_trades / total_trades) * 100
+
+    results = []
+    for symbol in req.symbols:
+        result = {
+            "status": "success",
+            "strategy": req.strategy,
+            "symbol": symbol,
+            "timeframe": req.timeframe,
+            "metrics": {
+                "total_return": round(total_return, 2),
+                "sharpe_ratio": round(sharpe_ratio, 2),
+                "max_drawdown": round(max_drawdown, 2),
+                "win_rate": round(win_rate, 1),
+                "profit_factor": round(random.uniform(1.1, 2.5), 2),
+                "total_trades": total_trades,
+                "winning_trades": winning_trades,
+                "losing_trades": losing_trades,
+                "avg_win": round(random.uniform(1.5, 4.0), 2),
+                "avg_loss": round(random.uniform(-3.0, -1.0), 2),
+                "best_trade": round(random.uniform(8.0, 15.0), 2),
+                "worst_trade": round(random.uniform(-12.0, -5.0), 2),
+                "avg_trade_duration": f"{random.randint(2, 8)} hours",
+            },
+            "trades": [],  # Trade history can be added later
+        }
+        results.append(result)
+
+    return {
+        "status": "completed",
+        "results": results,
+        "note": "Mock backtest results. Real backtest engine will be implemented."
+    }
