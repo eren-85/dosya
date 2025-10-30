@@ -50,6 +50,14 @@ try:
 except Exception:
     pass
 
+# data router (OHLCV, symbols, timeframes)
+try:
+    from .routes import data as data_router  # type: ignore
+    app.include_router(data_router.router)
+    log.info("Router mounted: data -> /api/data/*")
+except Exception as e:
+    log.exception("Failed to mount data router: %s", e)
+
 # Root bilgi
 @app.get("/")
 def root():

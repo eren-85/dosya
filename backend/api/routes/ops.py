@@ -59,18 +59,44 @@ class OneShotReq(BaseModel):
 
 
 # ---------- Helpers ----------
-def _run(args: list[str]) -> dict:
-    # Metin çıktı + UTF-8; emojiler PowerShell'de "garip" görünebilir ama JSON UTF-8 döner.
+def _run(args: list[str], timeout: int = 300) -> dict:
+    """
+    Run subprocess with timeout (default 5 minutes)
+    """
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    proc = subprocess.run(args, capture_output=True, text=True, env=env)
-    return {
-        "ok": proc.returncode == 0,
-        "returncode": proc.returncode,
-        "args": args,
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-    }
+
+    try:
+        proc = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=timeout
+        )
+        return {
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "args": args,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "args": args,
+            "stdout": "",
+            "stderr": f"Command timed out after {timeout} seconds",
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "args": args,
+            "stdout": "",
+            "stderr": f"Error: {str(e)}",
+        }
 
 
 # ---------- Endpoints ----------
@@ -159,17 +185,22 @@ def backtest(req: BacktestReq):
     import random
     from datetime import datetime
 
-    # Mock backtest results
-    total_return = random.uniform(-20, 80)
-    sharpe_ratio = random.uniform(0.5, 3.0)
-    max_drawdown = random.uniform(-25, -5)
-    total_trades = random.randint(50, 200)
-    winning_trades = int(total_trades * random.uniform(0.45, 0.65))
-    losing_trades = total_trades - winning_trades
-    win_rate = (winning_trades / total_trades) * 100
-
     results = []
     for symbol in req.symbols:
+        # Use seed for consistent results per symbol/strategy combination
+        seed_str = f"{symbol}_{req.strategy}_{req.timeframe}_{req.start_date}_{req.end_date}"
+        seed_value = hash(seed_str) % (2**32)
+        random.seed(seed_value)
+
+        # Mock backtest results (deterministic based on seed)
+        total_return = random.uniform(-20, 80)
+        sharpe_ratio = random.uniform(0.5, 3.0)
+        max_drawdown = random.uniform(-25, -5)
+        total_trades = random.randint(50, 200)
+        winning_trades = int(total_trades * random.uniform(0.45, 0.65))
+        losing_trades = total_trades - winning_trades
+        win_rate = (winning_trades / total_trades) * 100
+
         result = {
             "status": "success",
             "strategy": req.strategy,
@@ -194,8 +225,11 @@ def backtest(req: BacktestReq):
         }
         results.append(result)
 
+        # Reset random seed
+        random.seed()
+
     return {
         "status": "completed",
         "results": results,
-        "note": "Mock backtest results. Real backtest engine will be implemented."
+        "note": "Mock backtest results (deterministic). Real backtest engine will be implemented."
     }

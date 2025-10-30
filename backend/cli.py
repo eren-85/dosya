@@ -303,15 +303,25 @@ def cmd_daily(args: argparse.Namespace) -> None:
 def cmd_train(args: argparse.Namespace) -> None:
     symbols = parse_symbols(args.symbols)
     timeframes = parse_timeframes(args.timeframes)
+    model_type = getattr(args, 'model_type', 'ensemble')
+    epochs = getattr(args, 'epochs', 100)
+    device = getattr(args, 'device', 'cpu')
+
     app = _get_celery_app()
     for sym in symbols:
         for tf in timeframes:
             r = app.send_task(
                 "backend.tasks.tasks.train_ensemble_model",
-                kwargs={"symbol": sym, "timeframe": tf},
+                kwargs={
+                    "symbol": sym,
+                    "timeframe": tf,
+                    "model_type": model_type,
+                    "epochs": epochs,
+                    "device": device
+                },
                 queue=args.queue,
             )
-            print(f"ENQUEUED train_ensemble_model [{sym} {tf}]: {r.id}")
+            print(f"ENQUEUED {model_type} model training [{sym} {tf}] epochs={epochs} device={device}: {r.id}")
 
 
 def cmd_backtest(args: argparse.Namespace) -> None:
@@ -550,9 +560,12 @@ def main(argv=None) -> None:
     p.add_argument("--queue", default=os.getenv("ANALYSIS_QUEUE", "analysis"), help="Queue for daily tasks (default: analysis)")
     p.set_defaults(func=cmd_daily)
 
-    p = sub.add_parser("train", help="Enqueue ensemble model training tasks.")
+    p = sub.add_parser("train", help="Enqueue model training tasks.")
     p.add_argument("-s", "--symbols", required=True, help="Comma-separated symbols")
     p.add_argument("-t", "--timeframes", help="Comma-separated TFs (default: 1h)")
+    p.add_argument("--model-type", default="ensemble", choices=["ensemble", "lstm", "transformer", "ppo"], help="Model type (default: ensemble)")
+    p.add_argument("--epochs", type=int, default=100, help="Number of epochs (default: 100)")
+    p.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="Training device (default: cpu)")
     p.add_argument("--queue", default=os.getenv("ANALYSIS_QUEUE", "analysis"), help="Queue for training tasks (default: analysis)")
     p.set_defaults(func=cmd_train)
 
