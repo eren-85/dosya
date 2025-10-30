@@ -800,10 +800,11 @@ export default function Backtest() {
           background: "#e7f3ff",
           borderRadius: 8,
           fontSize: 14,
+          color: "#000",
         }}
       >
-        <h4 style={{ marginTop: 0 }}>📊 Backtesting Features:</h4>
-        <ul style={{ marginBottom: 0 }}>
+        <h4 style={{ marginTop: 0, color: "#000" }}>📊 Backtesting Features:</h4>
+        <ul style={{ marginBottom: 0, color: "#000" }}>
           <li>
             <strong>Multiple Strategies:</strong> Trend following, mean reversion, momentum,
             breakout, ML models

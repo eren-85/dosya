@@ -270,10 +270,11 @@ export default function Training() {
           background: "#e7f3ff",
           borderRadius: 8,
           fontSize: 14,
+          color: "#000",
         }}
       >
-        <h4 style={{ marginTop: 0 }}>📊 Model Information:</h4>
-        <ul style={{ marginBottom: 0 }}>
+        <h4 style={{ marginTop: 0, color: "#000" }}>📊 Model Information:</h4>
+        <ul style={{ marginBottom: 0, color: "#000" }}>
           <li>
             <strong>Ensemble:</strong> Combines XGBoost, LightGBM, CatBoost for robust predictions
           </li>

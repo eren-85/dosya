@@ -663,10 +663,11 @@ export default function Analysis() {
           background: "#e7f3ff",
           borderRadius: 8,
           fontSize: 14,
+          color: "#000",
         }}
       >
-        <h4 style={{ marginTop: 0 }}>🤖 AI Analysis Features:</h4>
-        <ul style={{ marginBottom: 0 }}>
+        <h4 style={{ marginTop: 0, color: "#000" }}>🤖 AI Analysis Features:</h4>
+        <ul style={{ marginBottom: 0, color: "#000" }}>
           <li>
             <strong>Market Bias:</strong> Bullish, Bearish, or Neutral sentiment
           </li>
