@@ -16,6 +16,8 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import SchoolIcon from '@mui/icons-material/School';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -38,9 +40,11 @@ const Layout: React.FC<Props> = ({ children }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Analysis', icon: <AssessmentIcon />, path: '/analysis' },
-    { text: 'Advanced Chart', icon: <TimelineIcon />, path: '/advanced-chart' },
+    { text: 'Download Data', icon: <CloudDownloadIcon />, path: '/download' },
+    { text: 'Train Models', icon: <SchoolIcon />, path: '/training' },
+    { text: 'AI Analysis', icon: <AssessmentIcon />, path: '/analysis' },
     { text: 'Backtest', icon: <ShowChartIcon />, path: '/backtest' },
+    { text: 'Advanced Chart', icon: <TimelineIcon />, path: '/advanced-chart' },
     { text: 'Portfolio', icon: <AccountBalanceWalletIcon />, path: '/portfolio' },
   ];
 

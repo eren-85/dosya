@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import Dashboard from './pages/Dashboard';
+import Download from './pages/Download';
+import Training from './pages/Training';
 import Analysis from './pages/Analysis';
 import Backtest from './pages/Backtest';
 import Portfolio from './pages/Portfolio';
@@ -35,6 +37,8 @@ function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/download" element={<Download />} />
+            <Route path="/training" element={<Training />} />
             <Route path="/analysis" element={<Analysis />} />
             <Route path="/backtest" element={<Backtest />} />
             <Route path="/portfolio" element={<Portfolio />} />
