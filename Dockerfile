@@ -25,7 +25,10 @@ RUN pip install --upgrade pip && \
 
 # Copy application code
 COPY backend /app/backend
-COPY data /app/data
+
+# Create data directories (volumes will mount here)
+RUN mkdir -p /app/data/historical /app/data/models /app/data/knowledge \
+    /app/data/annotations /app/data/patterns /app/data/training
 
 # Expose port
 EXPOSE 8000

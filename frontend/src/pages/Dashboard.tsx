@@ -8,7 +8,9 @@ import AlertsList from '../components/widgets/AlertsList';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const Dashboard: React.FC = () => {
-  const { marketData, alerts, isConnected } = useWebSocket('ws://localhost:8000/ws');
+  // WebSocket disabled for now - use REST API endpoints instead
+  // TODO: Enable when backend implements WebSocket
+  const { marketData, alerts, isConnected } = useWebSocket(); // No URL = disabled
 
   const [scenarios, setScenarios] = useState([
     {

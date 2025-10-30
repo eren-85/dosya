@@ -12,16 +12,24 @@ interface MarketData {
   key_observation: string;
 }
 
-export const useWebSocket = (url: string) => {
+export const useWebSocket = (url?: string) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
+    // WebSocket disabled for now - backend doesn't have socket.io yet
+    // TODO: Enable when backend implements WebSocket endpoints
+    if (!url) {
+      console.log('ℹ️ WebSocket disabled (backend not configured)');
+      return;
+    }
+
     const socketInstance = io(url, {
       transports: ['websocket'],
       reconnection: true,
+      reconnectionAttempts: 3, // Limit reconnection attempts
     });
 
     socketInstance.on('connect', () => {
@@ -31,6 +39,11 @@ export const useWebSocket = (url: string) => {
 
     socketInstance.on('disconnect', () => {
       console.log('❌ WebSocket disconnected');
+      setIsConnected(false);
+    });
+
+    socketInstance.on('connect_error', (error) => {
+      // Suppress error logs to avoid spam
       setIsConnected(false);
     });
 
