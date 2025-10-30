@@ -1,56 +1,84 @@
-# Python
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-*.egg-info/
-dist/
-build/
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+.pytype/
 
 # Virtual environments
 venv/
-env/
 ENV/
+env/
+.venv/
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Git
-.git/
-.gitignore
-
-# Environment
+# Environment files (will be mounted)
 .env
 .env.local
+.env.*.local
 
-# Data (large files)
-data/raw/*.csv
-data/processed/*.parquet
-data/models/*.pt
-data/models/*.pkl
+# Data (will be mounted as volumes)
+data/
 
-# Jupyter
-notebooks/
-*.ipynb_checkpoints
+# Logs
+*.log
+logs/
 
-# Tests
-tests/
-.pytest_cache/
-.coverage
-htmlcov/
+# Node/Frontend (separate container)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
 
-# Docs
+# Documentation
+README.md
+ARCHITECTURE.md
+*.md
 docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
 
 # Docker
 Dockerfile
-docker-compose.yml
+docker-compose*.yml
 .dockerignore
 
-# Frontend
-frontend/
-node_modules/
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Test
+tests/
+pytest.ini
+.pytest_cache/
+
+# ML models (large files - will be generated)
+*.pkl
+*.pth
+*.h5
+*.hdf5
+*.joblib
+*.pickle
