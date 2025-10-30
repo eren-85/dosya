@@ -121,15 +121,25 @@ cd D:\3\dosya
 # .env dosyasını oluşturun
 Copy-Item .env.example .env
 
-# .env dosyasını düzenleyin (en az Anthropic API key gerekli)
+# .env dosyasını düzenleyin (OpenAI veya Anthropic API key gerekli)
 notepad .env
 ```
 
 **Minimum .env ayarları:**
 ```env
+# Database
 POSTGRES_PASSWORD=GucluSifreniz123!
-ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxx
+
+# AI/LLM (OpenAI önerilen - daha iyi limitler)
+OPENAI_API_KEY=sk-proj-xxxxxxxxxx
+OPENAI_MODEL=gpt-4o-mini  # veya gpt-4o, gpt-4-turbo
+
+# Alternatif: Anthropic Claude
+# ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxx
+# ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
 ```
+
+**Not:** AI Analysis özelliği için OpenAI veya Anthropic API anahtarından en az birisi gereklidir.
 
 ### Adım 3: Başlatın! 🚀
 
@@ -245,8 +255,149 @@ report = response.json()
 print(report["market_pulse"])
 ```
 
-### Web Dashboard
-Tarayıcınızda açın: `http://localhost:3000`
+### 🎨 Web UI (React Dashboard)
+
+**Sistem başlatıldıktan sonra tarayıcınızda açın**: `http://localhost:3000`
+
+#### 📥 Download Data (Veri İndirme)
+
+Binance'ten tarihsel OHLCV verilerini indirin.
+
+**Özellikler:**
+- **Spot ve Futures** desteği
+- **Çoklu sembol**: Virgülle ayırarak birden fazla coin (örn: BTCUSDT,ETHUSDT,SOLUSDT)
+- **Tüm timeframe'ler**: 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 3d, 1w, 1M
+- **All-time veya tarih aralığı** seçimi
+- **Parquet formatı**: CSV'ye göre 5-10x daha hızlı yükleme
+- **Sync (Resume)**: Son mumdan devam et, eksik verileri tamamla
+
+**Kullanım:**
+1. Sol menüden "Download Data" sekmesine tıklayın
+2. Sembol(leri) girin (örn: BTCUSDT,ETHUSDT)
+3. Timeframe seçin (örn: 1h)
+4. Market türü seçin (Spot/Futures)
+5. All-time veya tarih aralığı belirleyin
+6. Parquet seçeneğini işaretleyin (önerilen)
+7. "Download" veya "Sync" butonuna tıklayın
+8. İndirme loglarını takip edin
+
+**İndirilen dosyalar:** `data/historical/` klasörüne kaydedilir
+
+#### 🧠 Train Models (Model Eğitimi)
+
+İndirdiğiniz veriler üzerinde makine öğrenmesi modelleri eğitin.
+
+**Modeller:**
+- **Ensemble**: XGBoost + LightGBM + CatBoost (robust tahminler)
+- **LSTM**: Recurrent neural network (dizi tahmini, GPU önerilen)
+- **Transformer**: Attention-based model (pattern recognition, GPU gerekli)
+- **PPO**: Reinforcement Learning (karar optimizasyonu, GPU gerekli)
+
+**GPU Desteği:**
+- ✅ RTX 4060 8GB ile BF16 + TF32 optimizasyonları
+- CPU modunda da çalışır (daha yavaş)
+
+**Kullanım:**
+1. Sol menüden "Train Models" sekmesine tıklayın
+2. Sembol(leri) girin (örn: BTCUSDT,ETHUSDT)
+3. Timeframe'leri girin (örn: 1h,4h,1d)
+4. Model türü seçin (Ensemble, LSTM, Transformer, PPO)
+5. Epoch sayısını ayarlayın (100 önerilen)
+6. GPU kullanımını işaretleyin
+7. "Start Training" butonuna tıklayın
+8. Eğitim loglarını takip edin
+
+**Eğitilen modeller:** `data/models/` klasörüne kaydedilir
+
+#### 🤖 AI Analysis (Yapay Zeka Analizi)
+
+OpenAI GPT-4 ile gerçek zamanlı piyasa analizi.
+
+**Özellikler:**
+- **Market Bias**: Bullish / Bearish / Neutral durum
+- **Confidence Score**: AI güven seviyesi (0-100%)
+- **Trading Signals**: Entry, Stop Loss, Take Profit seviyeleri
+- **Technical Analysis**: RSI, MACD, MA, Bollinger Bands
+- **On-Chain Data**: Exchange netflow, whale hareketleri (BTC için)
+- **Risk Assessment**: Risk seviyesi ve position size önerileri
+- **Quick Analysis**: Hızlı metin tabanlı analiz ve soru-cevap
+
+**Kullanım:**
+
+**Full Analysis:**
+1. Sol menüden "AI Analysis" sekmesine tıklayın
+2. Sembol(leri) girin (örn: BTCUSDT,ETHUSDT,SOLUSDT)
+3. Timeframe'leri girin (örn: 1H,4H,1D)
+4. Analysis Mode seçin (One-shot / Continuous)
+5. "Use OpenAI GPT-4" seçeneğini işaretleyin
+6. "Analyze Markets" butonuna tıklayın
+7. Her sembol/timeframe için detaylı analiz sonuçlarını görün:
+   - Market Bias ve Confidence
+   - Summary
+   - Trading Signal (Action, Entry, SL, TP1, TP2, Risk/Reward)
+   - Conclusion
+
+**Quick Analysis:**
+1. Aynı sayfanın alt bölümünde "Quick Analysis" kısmına gidin
+2. Sembol girin (örn: BTCUSDT)
+3. İsteğe bağlı soru girin (örn: "Is this a good entry point?")
+4. "Quick Analyze" butonuna tıklayın
+5. Hızlı AI yanıtını alın
+
+**Not:** OpenAI API anahtarı gereklidir (.env dosyasında `OPENAI_API_KEY`)
+
+#### 📈 Backtest (Strateji Testi)
+
+Tarihsel veriler üzerinde trading stratejilerini test edin.
+
+**Stratejiler:**
+- **Trend Following**: Moving Average Cross
+- **Mean Reversion**: Bollinger Bands
+- **Momentum**: RSI + MACD
+- **Breakout**: Support/Resistance
+- **ML Ensemble**: XGBoost + LightGBM
+- **ML LSTM**: Deep Learning
+- **ML Transformer**: Deep Learning
+
+**Performans Metrikleri:**
+- Total Return (%)
+- Sharpe Ratio
+- Max Drawdown
+- Win Rate (%)
+- Profit Factor
+- Total Trades
+- Avg Win/Loss
+- Best/Worst Trade
+
+**Kullanım:**
+1. Sol menüden "Backtest" sekmesine tıklayın
+2. Strateji seçin
+3. Sembol(leri) girin (örn: BTCUSDT,ETHUSDT)
+4. Timeframe seçin (örn: 1h)
+5. Tarih aralığı belirleyin (örn: 2023-01-01 / 2024-01-01)
+6. Risk parametrelerini ayarlayın:
+   - Initial Capital ($)
+   - Position Size (% of capital)
+   - Commission (% per trade)
+7. "Run Backtest" butonuna tıklayın
+8. Detaylı performans metriklerini ve trade history'yi inceleyin
+
+**Sonuçlar:**
+- Performance Metrics: 6 temel metrik (Return, Sharpe, Drawdown, Win Rate, Profit Factor, Total Trades)
+- Trade Statistics: 7 istatistik (Winning/Losing trades, Avg Win/Loss, Best/Worst, Duration)
+- Trade History: Tüm trade'lerin detaylı listesi (entry/exit time, price, PnL)
+
+#### 📊 Advanced Chart (Gelişmiş Grafik)
+
+Profesyonel teknik analiz araçları ve Smart Money kavramları.
+
+**Özellikler:** (Mevcut sayfa - önceki dokümantasyona bakın)
+
+#### 💼 Portfolio (Portföy Yönetimi)
+
+Portfolio takibi ve yönetimi.
+
+**Not:** Bu sayfa geliştirilme aşamasındadır.
 
 ## 🎓 Öğrenme ve Eğitim Sistemleri
 
