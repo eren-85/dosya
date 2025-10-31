@@ -5,8 +5,6 @@ import {
   CardContent,
   Grid,
   Typography,
-  Switch,
-  FormControlLabel,
   Chip,
   Button,
   FormControl,
@@ -15,7 +13,7 @@ import {
   MenuItem,
   SelectChangeEvent
 } from '@mui/material';
-import { createChart, IChartApi, ISeriesApi, LineStyle } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, LineStyle, Time } from 'lightweight-charts';
 import axios from 'axios';
 
 interface ChartOverlay {
@@ -35,21 +33,26 @@ const AdvancedChart: React.FC = () => {
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
+  // Store overlay series for cleanup
+  const overlaySeriesRef = useRef<ISeriesApi<any>[]>([]);
+
   const [overlays, setOverlays] = useState<ChartOverlay>({
     killZones: true,
     orderBlocks: true,
     fvg: true,
-    harmonicPatterns: true,
-    divergences: true,
+    harmonicPatterns: false,
+    divergences: false,
     supportResistance: true,
-    trendLines: true,
+    trendLines: false,
     fibonacci: true,
     swingPoints: true,
   });
 
   const [analysisData, setAnalysisData] = useState<any>(null);
+  const [candleData, setCandleData] = useState<any[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
+  const [marketType, setMarketType] = useState('futures');
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -72,10 +75,10 @@ const AdvancedChart: React.FC = () => {
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: '#2B2B43',
+        borderColor: '#cccccc',
       },
       rightPriceScale: {
-        borderColor: '#2B2B43',
+        borderColor: '#cccccc',
       },
     });
 
@@ -106,14 +109,33 @@ const AdvancedChart: React.FC = () => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [selectedSymbol, selectedTimeframe]);
+  }, [selectedSymbol, selectedTimeframe, marketType]);
 
   useEffect(() => {
-    if (chartRef.current && analysisData) {
+    if (chartRef.current && analysisData && candleData.length > 0) {
+      // Clear previous overlays
+      clearOverlays();
       // Redraw overlays when toggle changes
       drawAllOverlays();
     }
-  }, [overlays, analysisData]);
+  }, [overlays, analysisData, candleData]);
+
+  const clearOverlays = () => {
+    // Remove all overlay series
+    overlaySeriesRef.current.forEach(series => {
+      try {
+        chartRef.current?.removeSeries(series);
+      } catch (e) {
+        // Series already removed
+      }
+    });
+    overlaySeriesRef.current = [];
+
+    // Clear markers
+    if (candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.setMarkers([]);
+    }
+  };
 
   const loadChartData = async () => {
     try {
@@ -124,6 +146,7 @@ const AdvancedChart: React.FC = () => {
         params: {
           symbol: selectedSymbol,
           timeframe: selectedTimeframe,
+          market_type: marketType,
           limit: 500,
         },
       });
@@ -131,7 +154,7 @@ const AdvancedChart: React.FC = () => {
       // Backend returns {status: 'success', data: [...]}
       if (response.data.status === 'success' && response.data.data) {
         const candles = response.data.data.map((c: any) => ({
-          time: c.time, // Backend returns 'time', not 'timestamp'
+          time: c.time,
           open: c.open,
           high: c.high,
           low: c.low,
@@ -139,111 +162,162 @@ const AdvancedChart: React.FC = () => {
         }));
 
         candlestickSeriesRef.current?.setData(candles);
-      }
+        setCandleData(candles);
 
-      // TODO: Fetch advanced analysis from backend
-      // For now, use mock analysis data
-      loadMockAnalysis();
+        // Generate analysis from candle data
+        generateAnalysis(candles);
+      }
     } catch (error) {
       console.error('Error loading chart data:', error);
-      // Use mock data for development
-      loadMockData();
     }
   };
 
-  const loadMockData = () => {
-    // Deterministic mock candle data (seed-based for consistency)
-    // Use symbol + timeframe as seed to ensure same data on refresh
-    const seedStr = `${selectedSymbol}_${selectedTimeframe}`;
-    let seed = 0;
-    for (let i = 0; i < seedStr.length; i++) {
-      seed = seed * 31 + seedStr.charCodeAt(i);
+  const generateAnalysis = (candles: any[]) => {
+    if (candles.length < 50) {
+      setAnalysisData(null);
+      return;
     }
 
-    // Simple seeded random function
-    const seededRandom = () => {
-      seed = (seed * 9301 + 49297) % 233280;
-      return seed / 233280;
-    };
+    // Calculate analysis from real candle data
+    const prices = candles.map(c => c.close);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
 
-    const basePrice = selectedSymbol === 'BTCUSDT' ? 67000 :
-                      selectedSymbol === 'ETHUSDT' ? 3500 :
-                      selectedSymbol === 'BNBUSDT' ? 600 : 1000;
+    const maxPrice = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+    const priceRange = maxPrice - minPrice;
 
-    const mockCandles = [];
-    let price = basePrice;
+    // Find swing highs and lows (local maxima/minima)
+    const swingHighs: any[] = [];
+    const swingLows: any[] = [];
+    const lookback = 10;
 
-    for (let i = 0; i < 500; i++) {
-      const open = price;
-      const changePercent = (seededRandom() - 0.5) * 0.04; // ±2%
-      price = price * (1 + changePercent);
+    for (let i = lookback; i < candles.length - lookback; i++) {
+      const isSwingHigh = highs.slice(i - lookback, i).every(h => h <= highs[i]) &&
+                          highs.slice(i + 1, i + lookback + 1).every(h => h < highs[i]);
 
-      const high = open * (1 + seededRandom() * 0.01); // up to +1%
-      const low = open * (1 - seededRandom() * 0.01);  // up to -1%
-      const close = low + seededRandom() * (high - low);
+      const isSwingLow = lows.slice(i - lookback, i).every(l => l >= lows[i]) &&
+                         lows.slice(i + 1, i + lookback + 1).every(l => l > lows[i]);
 
-      mockCandles.push({
-        time: Math.floor(Date.now() / 1000) - (500 - i) * 3600,
-        open: Math.round(open * 100) / 100,
-        high: Math.round(high * 100) / 100,
-        low: Math.round(low * 100) / 100,
-        close: Math.round(close * 100) / 100,
+      if (isSwingHigh) {
+        swingHighs.push({ index: i, price: highs[i], timestamp: candles[i].time });
+      }
+      if (isSwingLow) {
+        swingLows.push({ index: i, price: lows[i], timestamp: candles[i].time });
+      }
+    }
+
+    // Calculate Fibonacci levels from recent swing high/low
+    const recentSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : { price: maxPrice };
+    const recentSwingLow = swingLows.length > 0 ? swingLows[swingLows.length - 1] : { price: minPrice };
+
+    const fibHigh = Math.max(recentSwingHigh.price, recentSwingLow.price);
+    const fibLow = Math.min(recentSwingHigh.price, recentSwingLow.price);
+    const fibRange = fibHigh - fibLow;
+
+    // Calculate support/resistance levels (price levels with multiple touches)
+    const supportResistance: any[] = [];
+    const priceRounded = prices.map(p => Math.round(p / (priceRange * 0.01)) * (priceRange * 0.01));
+    const priceCounts: { [key: number]: number } = {};
+
+    priceRounded.forEach(p => {
+      priceCounts[p] = (priceCounts[p] || 0) + 1;
+    });
+
+    Object.entries(priceCounts)
+      .filter(([_, count]) => count >= 5)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .forEach(([price, count]) => {
+        const currentPrice = prices[prices.length - 1];
+        supportResistance.push({
+          level: parseFloat(price),
+          type: parseFloat(price) < currentPrice ? 'support' : 'resistance',
+          strength: Math.min(count / 5, 5)
+        });
       });
 
-      price = close;
+    // Detect order blocks (strong bullish/bearish candles)
+    const orderBlocks: any[] = [];
+    for (let i = 1; i < candles.length; i++) {
+      const candle = candles[i];
+      const prevCandle = candles[i - 1];
+      const bodySize = Math.abs(candle.close - candle.open);
+      const prevBodySize = Math.abs(prevCandle.close - prevCandle.open);
+
+      // Strong bullish candle after bearish
+      if (bodySize > prevBodySize * 2 && candle.close > candle.open && prevCandle.close < prevCandle.open) {
+        orderBlocks.push({
+          high: candle.high,
+          low: candle.low,
+          type: 'bullish',
+          timestamp: candle.time
+        });
+      }
+
+      // Strong bearish candle after bullish
+      if (bodySize > prevBodySize * 2 && candle.close < candle.open && prevCandle.close > prevCandle.open) {
+        orderBlocks.push({
+          high: candle.high,
+          low: candle.low,
+          type: 'bearish',
+          timestamp: candle.time
+        });
+      }
     }
 
-    candlestickSeriesRef.current?.setData(mockCandles);
-    loadMockAnalysis();
-  };
+    // Detect Fair Value Gaps (FVG) - gaps between candles
+    const fvg: any[] = [];
+    for (let i = 2; i < candles.length; i++) {
+      const candle1 = candles[i - 2];
+      const candle2 = candles[i - 1];
+      const candle3 = candles[i];
 
-  const loadMockAnalysis = () => {
-    // Mock analysis data
-    setAnalysisData({
-      swing_highs: [
-        { index: 50, price: 68500, timestamp: Math.floor(Date.now() / 1000) - 150 * 3600 },
-        { index: 120, price: 69200, timestamp: Math.floor(Date.now() / 1000) - 80 * 3600 },
-      ],
-      swing_lows: [
-        { index: 30, price: 65500, timestamp: Math.floor(Date.now() / 1000) - 170 * 3600 },
-        { index: 100, price: 66200, timestamp: Math.floor(Date.now() / 1000) - 100 * 3600 },
-      ],
-      fibonacci: {
-        swing_high: 69200,
-        swing_low: 65500,
-        level_618: 67500,
-        level_382: 66800,
-        golden_zone_low: 67500,
-        golden_zone_high: 67650,
-        ote_high: 67800,
-        ote_low: 66500,
-      },
-      support_resistance: [
-        { level: 67000, type: 'support', strength: 3 },
-        { level: 68500, type: 'resistance', strength: 4 },
-      ],
-      harmonic_patterns: [
-        {
-          name: 'Gartley',
+      // Bullish FVG: gap between candle1 high and candle3 low
+      if (candle1.high < candle3.low) {
+        fvg.push({
+          start: candle1.high,
+          end: candle3.low,
           type: 'bullish',
-          points: { X: 65000, A: 68000, B: 66500, C: 67500, D: 66000 },
-        },
-      ],
-      order_blocks: [
-        { price: 66800, type: 'bullish', timestamp: Math.floor(Date.now() / 1000) - 50 * 3600 },
-      ],
-      fvg: [
-        { start: 67200, end: 67600, type: 'bullish', timestamp: Math.floor(Date.now() / 1000) - 30 * 3600 },
-      ],
+          timestamp: candle3.time
+        });
+      }
+
+      // Bearish FVG: gap between candle1 low and candle3 high
+      if (candle1.low > candle3.high) {
+        fvg.push({
+          start: candle3.high,
+          end: candle1.low,
+          type: 'bearish',
+          timestamp: candle3.time
+        });
+      }
+    }
+
+    setAnalysisData({
+      swing_highs: swingHighs,
+      swing_lows: swingLows,
+      fibonacci: {
+        swing_high: fibHigh,
+        swing_low: fibLow,
+        level_236: fibLow + fibRange * 0.236,
+        level_382: fibLow + fibRange * 0.382,
+        level_500: fibLow + fibRange * 0.500,
+        level_618: fibLow + fibRange * 0.618,
+        level_786: fibLow + fibRange * 0.786,
+        golden_zone_low: fibLow + fibRange * 0.618,
+        golden_zone_high: fibLow + fibRange * 0.66,
+        ote_low: fibLow + fibRange * 0.295,
+        ote_high: fibLow + fibRange * 0.705,
+      },
+      support_resistance: supportResistance,
+      order_blocks: orderBlocks.slice(-10), // Last 10
+      fvg: fvg.slice(-10), // Last 10
     });
   };
 
   const drawAllOverlays = () => {
-    if (!chartRef.current || !analysisData) return;
-
-    // Clear previous markers
-    // Note: LightweightCharts doesn't have a built-in clear method
-    // We would need to track and remove individual markers
+    if (!chartRef.current || !analysisData || candleData.length === 0) return;
 
     // Draw Kill Zones
     if (overlays.killZones) {
@@ -277,56 +351,81 @@ const AdvancedChart: React.FC = () => {
   };
 
   const drawKillZones = () => {
-    if (!chartRef.current) return;
+    if (!chartRef.current || candleData.length === 0) return;
 
-    // London Kill Zone: 02:00-05:00 UTC (background shading)
-    // New York Kill Zone: 13:00-16:00 UTC
-    // Asia Kill Zone: 20:00-02:00 UTC
+    // Kill Zones: vertical lines at specific hours (UTC)
+    // London: 02:00-05:00, NY: 13:00-16:00, Asia: 20:00-02:00
+    const killZoneHours = [2, 3, 4, 5, 13, 14, 15, 16, 20, 21, 22, 23, 0, 1];
 
-    // Note: LightweightCharts doesn't support time-based backgrounds directly
-    // This would require custom rendering or using price series with null values
-    console.log('Kill Zones would be drawn here');
+    const markers: any[] = [];
+    candleData.forEach(candle => {
+      const date = new Date(candle.time * 1000);
+      const hour = date.getUTCHours();
+
+      if (killZoneHours.includes(hour)) {
+        // Add subtle marker for kill zone hours
+        if (hour === 2 || hour === 13 || hour === 20) {
+          markers.push({
+            time: candle.time,
+            position: 'inBar',
+            color: 'rgba(33, 150, 243, 0.3)',
+            shape: 'circle',
+            text: hour === 2 ? 'LON' : hour === 13 ? 'NY' : 'ASIA',
+            size: 0.5
+          });
+        }
+      }
+    });
+
+    if (markers.length > 0 && candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.setMarkers(markers);
+    }
   };
 
   const drawFibonacci = () => {
-    if (!chartRef.current || !analysisData.fibonacci) return;
+    if (!chartRef.current || !analysisData.fibonacci || candleData.length === 0) return;
 
     const fib = analysisData.fibonacci;
+    const firstTime = candleData[0].time;
+    const lastTime = candleData[candleData.length - 1].time;
 
-    // Draw Fibonacci levels as horizontal lines
     const levels = [
-      { price: fib.level_0, label: '0.0%', color: '#888' },
-      { price: fib.level_236, label: '23.6%', color: '#888' },
-      { price: fib.level_382, label: '38.2%', color: '#FFA726' },
-      { price: fib.golden_zone_382_low, label: 'GZ 382 Low', color: '#FFD700' },
-      { price: fib.golden_zone_382_high, label: 'GZ 382 High', color: '#FFD700' },
-      { price: fib.ote_low, label: 'OTE Low (0.295)', color: '#00E676' },
-      { price: fib.level_500, label: '50.0%', color: '#888' },
-      { price: fib.level_618, label: '61.8%', color: '#FFA726' },
-      { price: fib.golden_zone_low, label: 'GZ 618 Low', color: '#FFD700' },
-      { price: fib.golden_zone_high, label: 'GZ 618 High', color: '#FFD700' },
-      { price: fib.ote_high, label: 'OTE High (0.705)', color: '#00E676' },
-      { price: fib.level_786, label: '78.6%', color: '#888' },
-      { price: fib.level_1000, label: '100.0%', color: '#888' },
+      { price: fib.level_236, label: '23.6%', color: '#9E9E9E', width: 1 },
+      { price: fib.level_382, label: '38.2%', color: '#FFA726', width: 1 },
+      { price: fib.level_500, label: '50.0%', color: '#2196F3', width: 2 },
+      { price: fib.level_618, label: '61.8%', color: '#FFA726', width: 1 },
+      { price: fib.level_786, label: '78.6%', color: '#9E9E9E', width: 1 },
+      { price: fib.golden_zone_low, label: 'GZ Low', color: '#FFD700', width: 2 },
+      { price: fib.golden_zone_high, label: 'GZ High', color: '#FFD700', width: 2 },
+      { price: fib.ote_low, label: 'OTE Low', color: '#00E676', width: 2 },
+      { price: fib.ote_high, label: 'OTE High', color: '#00E676', width: 2 },
     ];
 
     levels.forEach((level) => {
-      const lineSeries = chartRef.current!.addLineSeries({
-        color: level.color,
-        lineWidth: level.label.includes('GZ') ? 2 : (level.label.includes('OTE') ? 2 : 1),
-        lineStyle: level.label.includes('GZ') || level.label.includes('OTE') ? LineStyle.Solid : LineStyle.Dashed,
-        priceLineVisible: false,
-      });
+      if (level.price && level.price > 0) {
+        const lineSeries = chartRef.current!.addLineSeries({
+          color: level.color,
+          lineWidth: level.width,
+          lineStyle: level.width === 2 ? LineStyle.Solid : LineStyle.Dotted,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
 
-      lineSeries.setData([
-        { time: Date.now() / 1000 - 200 * 3600, value: level.price },
-        { time: Date.now() / 1000, value: level.price },
-      ]);
+        lineSeries.setData([
+          { time: firstTime as Time, value: level.price },
+          { time: lastTime as Time, value: level.price },
+        ]);
+
+        overlaySeriesRef.current.push(lineSeries);
+      }
     });
   };
 
   const drawSupportResistance = () => {
-    if (!chartRef.current || !analysisData.support_resistance) return;
+    if (!chartRef.current || !analysisData.support_resistance || candleData.length === 0) return;
+
+    const firstTime = candleData[0].time;
+    const lastTime = candleData[candleData.length - 1].time;
 
     analysisData.support_resistance.forEach((sr: any) => {
       const lineSeries = chartRef.current!.addLineSeries({
@@ -334,12 +433,15 @@ const AdvancedChart: React.FC = () => {
         lineWidth: Math.min(sr.strength, 3),
         lineStyle: LineStyle.Solid,
         priceLineVisible: false,
+        lastValueVisible: false,
       });
 
       lineSeries.setData([
-        { time: Date.now() / 1000 - 200 * 3600, value: sr.level },
-        { time: Date.now() / 1000, value: sr.level },
+        { time: firstTime as Time, value: sr.level },
+        { time: lastTime as Time, value: sr.level },
       ]);
+
+      overlaySeriesRef.current.push(lineSeries);
     });
   };
 
@@ -370,21 +472,96 @@ const AdvancedChart: React.FC = () => {
       });
     });
 
-    // Sort markers by time (REQUIRED by lightweight-charts)
+    // Sort markers by time
     markers.sort((a, b) => a.time - b.time);
 
-    candlestickSeriesRef.current?.setMarkers(markers);
+    if (candlestickSeriesRef.current && markers.length > 0 && !overlays.killZones) {
+      candlestickSeriesRef.current.setMarkers(markers);
+    }
   };
 
   const drawOrderBlocks = () => {
-    console.log('Order Blocks would be drawn as rectangles');
-    // LightweightCharts doesn't support rectangles natively
-    // Would require custom drawing or using background series
+    if (!chartRef.current || !analysisData.order_blocks || candleData.length === 0) return;
+
+    // Draw order blocks as filled areas (approximated with line series)
+    analysisData.order_blocks.forEach((ob: any) => {
+      // Find candle at this timestamp
+      const startIdx = candleData.findIndex(c => c.time >= ob.timestamp);
+      if (startIdx === -1) return;
+
+      const endIdx = Math.min(startIdx + 10, candleData.length - 1);
+
+      // Draw top line
+      const topLine = chartRef.current!.addLineSeries({
+        color: ob.type === 'bullish' ? 'rgba(0, 191, 166, 0.6)' : 'rgba(255, 107, 107, 0.6)',
+        lineWidth: 3,
+        lineStyle: LineStyle.Solid,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+
+      topLine.setData([
+        { time: candleData[startIdx].time as Time, value: ob.high },
+        { time: candleData[endIdx].time as Time, value: ob.high },
+      ]);
+
+      // Draw bottom line
+      const bottomLine = chartRef.current!.addLineSeries({
+        color: ob.type === 'bullish' ? 'rgba(0, 191, 166, 0.6)' : 'rgba(255, 107, 107, 0.6)',
+        lineWidth: 3,
+        lineStyle: LineStyle.Solid,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+
+      bottomLine.setData([
+        { time: candleData[startIdx].time as Time, value: ob.low },
+        { time: candleData[endIdx].time as Time, value: ob.low },
+      ]);
+
+      overlaySeriesRef.current.push(topLine, bottomLine);
+    });
   };
 
   const drawFVG = () => {
-    console.log('Fair Value Gaps would be drawn as shaded zones');
-    // Similar to order blocks, would need custom rendering
+    if (!chartRef.current || !analysisData.fvg || candleData.length === 0) return;
+
+    // Draw FVG as shaded zones (approximated with line series)
+    analysisData.fvg.forEach((gap: any) => {
+      const startIdx = candleData.findIndex(c => c.time >= gap.timestamp);
+      if (startIdx === -1) return;
+
+      const endIdx = Math.min(startIdx + 10, candleData.length - 1);
+
+      // Draw gap boundaries
+      const topLine = chartRef.current!.addLineSeries({
+        color: gap.type === 'bullish' ? 'rgba(76, 175, 80, 0.4)' : 'rgba(244, 67, 54, 0.4)',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+
+      topLine.setData([
+        { time: candleData[startIdx].time as Time, value: gap.end },
+        { time: candleData[endIdx].time as Time, value: gap.end },
+      ]);
+
+      const bottomLine = chartRef.current!.addLineSeries({
+        color: gap.type === 'bullish' ? 'rgba(76, 175, 80, 0.4)' : 'rgba(244, 67, 54, 0.4)',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+
+      bottomLine.setData([
+        { time: candleData[startIdx].time as Time, value: gap.start },
+        { time: candleData[endIdx].time as Time, value: gap.start },
+      ]);
+
+      overlaySeriesRef.current.push(topLine, bottomLine);
+    });
   };
 
   const toggleOverlay = (key: keyof ChartOverlay) => {
@@ -403,11 +580,11 @@ const AdvancedChart: React.FC = () => {
               </Typography>
 
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                This chart shows all detected patterns, levels, and zones. Toggle overlays below.
+                Real-time pattern detection with Smart Money Concepts. Toggle overlays below.
               </Typography>
 
               {/* Symbol and Timeframe Selectors */}
-              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+              <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                   <InputLabel>Symbol</InputLabel>
                   <Select
@@ -424,6 +601,18 @@ const AdvancedChart: React.FC = () => {
                 </FormControl>
 
                 <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Market</InputLabel>
+                  <Select
+                    value={marketType}
+                    label="Market"
+                    onChange={(e: SelectChangeEvent) => setMarketType(e.target.value)}
+                  >
+                    <MenuItem value="futures">Futures</MenuItem>
+                    <MenuItem value="spot">Spot</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 130 }}>
                   <InputLabel>Timeframe</InputLabel>
                   <Select
                     value={selectedTimeframe}
@@ -459,12 +648,6 @@ const AdvancedChart: React.FC = () => {
                   />
                 ))}
               </Box>
-
-              <Box sx={{ mt: 2 }}>
-                <Button variant="outlined" onClick={() => alert('Manual annotation mode (coming soon)')}>
-                  Manual Annotation Mode
-                </Button>
-              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -488,50 +671,58 @@ const AdvancedChart: React.FC = () => {
 
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2">Fibonacci Levels:</Typography>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                    Fibonacci Levels:
+                  </Typography>
                   <Box sx={{ pl: 2 }}>
-                    <Typography variant="body2">
-                      🟡 <strong>Golden Zone 618:</strong> 0.618 - 0.66 (High probability reversal)
-                    </Typography>
-                    <Typography variant="body2">
-                      🟡 <strong>Golden Zone 382:</strong> 0.34 - 0.382
-                    </Typography>
-                    <Typography variant="body2">
-                      🟢 <strong>OTE High:</strong> 0.705 (Optimal Trade Entry)
-                    </Typography>
-                    <Typography variant="body2">
-                      🟢 <strong>OTE Low:</strong> 0.295
-                    </Typography>
+                    <Typography variant="body2">🟡 <strong>Golden Zone:</strong> 0.618 - 0.66 (High probability reversal)</Typography>
+                    <Typography variant="body2">🟢 <strong>OTE:</strong> 0.295 - 0.705 (Optimal Trade Entry)</Typography>
+                    <Typography variant="body2">🔵 <strong>50% Level:</strong> Equilibrium (blue, thick line)</Typography>
+                    <Typography variant="body2">⚪ <strong>Other Levels:</strong> 23.6%, 38.2%, 61.8%, 78.6%</Typography>
                   </Box>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2">Kill Zones (UTC):</Typography>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                    Kill Zones (UTC):
+                  </Typography>
                   <Box sx={{ pl: 2 }}>
-                    <Typography variant="body2">🟦 London: 02:00 - 05:00</Typography>
-                    <Typography variant="body2">🟦 New York: 13:00 - 16:00</Typography>
-                    <Typography variant="body2">🟦 Asia: 20:00 - 02:00</Typography>
+                    <Typography variant="body2">🟦 <strong>London:</strong> 02:00 - 05:00</Typography>
+                    <Typography variant="body2">🟦 <strong>New York:</strong> 13:00 - 16:00</Typography>
+                    <Typography variant="body2">🟦 <strong>Asia:</strong> 20:00 - 02:00</Typography>
+                    <Typography variant="caption" color="text.secondary">High liquidity periods</Typography>
                   </Box>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2">Patterns:</Typography>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                    Smart Money Concepts:
+                  </Typography>
                   <Box sx={{ pl: 2 }}>
-                    <Typography variant="body2">📐 Harmonic Patterns (Gartley, Bat, Butterfly, Crab)</Typography>
-                    <Typography variant="body2">📊 Divergences (RSI, MACD, Volume)</Typography>
-                    <Typography variant="body2">🔺 Swing Highs/Lows</Typography>
+                    <Typography variant="body2">🟩 <strong>Bullish Order Blocks:</strong> Strong buying zones</Typography>
+                    <Typography variant="body2">🟥 <strong>Bearish Order Blocks:</strong> Strong selling zones</Typography>
+                    <Typography variant="body2">📦 <strong>Fair Value Gaps (FVG):</strong> Imbalance areas likely to fill</Typography>
                   </Box>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2">Smart Money Concepts:</Typography>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                    Patterns:
+                  </Typography>
                   <Box sx={{ pl: 2 }}>
-                    <Typography variant="body2">🟩 Bullish Order Blocks</Typography>
-                    <Typography variant="body2">🟥 Bearish Order Blocks</Typography>
-                    <Typography variant="body2">⬜ Fair Value Gaps (FVG)</Typography>
+                    <Typography variant="body2">🔻 <strong>Swing Highs (SH):</strong> Local price peaks</Typography>
+                    <Typography variant="body2">🔺 <strong>Swing Lows (SL):</strong> Local price troughs</Typography>
+                    <Typography variant="body2">➖ <strong>Support/Resistance:</strong> Key price levels</Typography>
                   </Box>
                 </Grid>
               </Grid>
+
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  💡 <strong>Tip:</strong> Click overlay chips to toggle them on/off. Analysis is generated from real candle data.
+                  All patterns are detected automatically using technical analysis algorithms.
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
