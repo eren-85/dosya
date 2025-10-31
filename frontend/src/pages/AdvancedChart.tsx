@@ -172,6 +172,44 @@ const AdvancedChart: React.FC = () => {
     }
   };
 
+  // RSI calculation helper
+  const calculateRSI = (prices: number[], period: number = 14): number[] => {
+    const rsi: number[] = [];
+    if (prices.length < period + 1) return rsi;
+
+    for (let i = 0; i < period; i++) {
+      rsi.push(50); // Default neutral RSI for first period
+    }
+
+    let gains = 0;
+    let losses = 0;
+
+    // Calculate initial average gain/loss
+    for (let i = 1; i <= period; i++) {
+      const change = prices[i] - prices[i - 1];
+      if (change > 0) gains += change;
+      else losses += Math.abs(change);
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+    rsi.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss)));
+
+    // Calculate RSI for rest of data
+    for (let i = period + 1; i < prices.length; i++) {
+      const change = prices[i] - prices[i - 1];
+      const gain = change > 0 ? change : 0;
+      const loss = change < 0 ? Math.abs(change) : 0;
+
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+      rsi.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss)));
+    }
+
+    return rsi;
+  };
+
   const generateAnalysis = (candles: any[]) => {
     if (candles.length < 50) {
       setAnalysisData(null);
@@ -330,6 +368,124 @@ const AdvancedChart: React.FC = () => {
       });
     }
 
+    // Calculate RSI for divergence detection
+    const rsi = calculateRSI(prices, 14);
+
+    // Detect RSI Divergences
+    const divergences: any[] = [];
+    // Bullish divergence: Price makes lower low, RSI makes higher low
+    for (let i = 1; i < swingLows.length; i++) {
+      const prevLow = swingLows[i - 1];
+      const currLow = swingLows[i];
+      const prevRSI = rsi[prevLow.index];
+      const currRSI = rsi[currLow.index];
+
+      if (currLow.price < prevLow.price && currRSI > prevRSI) {
+        divergences.push({
+          type: 'bullish',
+          point1: { time: prevLow.timestamp, price: prevLow.price },
+          point2: { time: currLow.timestamp, price: currLow.price },
+          rsi1: prevRSI,
+          rsi2: currRSI
+        });
+      }
+    }
+
+    // Bearish divergence: Price makes higher high, RSI makes lower high
+    for (let i = 1; i < swingHighs.length; i++) {
+      const prevHigh = swingHighs[i - 1];
+      const currHigh = swingHighs[i];
+      const prevRSI = rsi[prevHigh.index];
+      const currRSI = rsi[currHigh.index];
+
+      if (currHigh.price > prevHigh.price && currRSI < prevRSI) {
+        divergences.push({
+          type: 'bearish',
+          point1: { time: prevHigh.timestamp, price: prevHigh.price },
+          point2: { time: currHigh.timestamp, price: currHigh.price },
+          rsi1: prevRSI,
+          rsi2: currRSI
+        });
+      }
+    }
+
+    // Detect Harmonic Patterns (simplified Gartley, Bat, Butterfly, Crab)
+    const harmonicPatterns: any[] = [];
+    if (swingHighs.length >= 2 && swingLows.length >= 2) {
+      // Find XABCD pattern
+      for (let i = 0; i < swingLows.length - 1; i++) {
+        const X = swingLows[i];
+        for (let j = i + 1; j < swingHighs.length; j++) {
+          const A = swingHighs[j];
+          if (A.index <= X.index) continue;
+
+          for (let k = j + 1; k < swingLows.length; k++) {
+            const B = swingLows[k];
+            if (B.index <= A.index) continue;
+
+            for (let l = k + 1; l < swingHighs.length; l++) {
+              const C = swingHighs[l];
+              if (C.index <= B.index) continue;
+
+              for (let m = l + 1; m < swingLows.length; m++) {
+                const D = swingLows[m];
+                if (D.index <= C.index) continue;
+
+                // Calculate Fibonacci ratios
+                const XA = A.price - X.price;
+                const AB = A.price - B.price;
+                const BC = C.price - B.price;
+                const CD = C.price - D.price;
+                const XD = D.price - X.price;
+
+                const AB_XA = AB / XA;
+                const BC_AB = BC / AB;
+                const CD_BC = CD / BC;
+                const XD_XA = XD / XA;
+
+                // Gartley: AB=0.618 XA, BC=0.382-0.886 AB, CD=1.272-1.618 BC, XD=0.786 XA
+                if (Math.abs(AB_XA - 0.618) < 0.1 && BC_AB >= 0.382 && BC_AB <= 0.886 &&
+                    CD_BC >= 1.272 && CD_BC <= 1.618 && Math.abs(XD_XA - 0.786) < 0.1) {
+                  harmonicPatterns.push({
+                    type: 'Gartley',
+                    points: { X, A, B, C, D },
+                    bullish: D.price < X.price
+                  });
+                }
+
+                // Bat: AB=0.382-0.5 XA, BC=0.382-0.886 AB, CD=1.618-2.618 BC, XD=0.886 XA
+                if (AB_XA >= 0.382 && AB_XA <= 0.5 && BC_AB >= 0.382 && BC_AB <= 0.886 &&
+                    CD_BC >= 1.618 && CD_BC <= 2.618 && Math.abs(XD_XA - 0.886) < 0.1) {
+                  harmonicPatterns.push({
+                    type: 'Bat',
+                    points: { X, A, B, C, D },
+                    bullish: D.price < X.price
+                  });
+                }
+
+                // Butterfly: AB=0.786 XA, BC=0.382-0.886 AB, CD=1.618-2.24 BC, XD=1.272-1.618 XA
+                if (Math.abs(AB_XA - 0.786) < 0.1 && BC_AB >= 0.382 && BC_AB <= 0.886 &&
+                    CD_BC >= 1.618 && CD_BC <= 2.24 && XD_XA >= 1.272 && XD_XA <= 1.618) {
+                  harmonicPatterns.push({
+                    type: 'Butterfly',
+                    points: { X, A, B, C, D },
+                    bullish: D.price < X.price
+                  });
+                }
+
+                // Only check first few patterns to avoid performance issues
+                if (harmonicPatterns.length >= 3) break;
+              }
+              if (harmonicPatterns.length >= 3) break;
+            }
+            if (harmonicPatterns.length >= 3) break;
+          }
+          if (harmonicPatterns.length >= 3) break;
+        }
+        if (harmonicPatterns.length >= 3) break;
+      }
+    }
+
     setAnalysisData({
       swing_highs: swingHighs,
       swing_lows: swingLows,
@@ -350,6 +506,8 @@ const AdvancedChart: React.FC = () => {
       order_blocks: orderBlocks.slice(-10), // Last 10
       fvg: fvg.slice(-10), // Last 10
       trend_lines: trendLines,
+      divergences: divergences.slice(-5), // Last 5
+      harmonic_patterns: harmonicPatterns.slice(0, 3), // First 3
     });
   };
 
@@ -389,6 +547,16 @@ const AdvancedChart: React.FC = () => {
     // Draw FVG
     if (overlays.fvg && analysisData.fvg) {
       drawFVG();
+    }
+
+    // Draw Divergences
+    if (overlays.divergences && analysisData.divergences) {
+      drawDivergences();
+    }
+
+    // Draw Harmonic Patterns
+    if (overlays.harmonicPatterns && analysisData.harmonic_patterns) {
+      drawHarmonicPatterns();
     }
   };
 
@@ -659,6 +827,74 @@ const AdvancedChart: React.FC = () => {
       ]);
 
       overlaySeriesRef.current.push(topLine, bottomLine);
+    });
+  };
+
+  const drawDivergences = () => {
+    if (!chartRef.current || !analysisData.divergences || candleData.length === 0) return;
+
+    analysisData.divergences.forEach((div: any) => {
+      const lineSeries = chartRef.current!.addLineSeries({
+        color: div.type === 'bullish' ? '#4CAF50' : '#F44336',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+
+      lineSeries.setData([
+        { time: div.point1.time as Time, value: div.point1.price },
+        { time: div.point2.time as Time, value: div.point2.price },
+      ]);
+
+      overlaySeriesRef.current.push(lineSeries);
+    });
+  };
+
+  const drawHarmonicPatterns = () => {
+    if (!chartRef.current || !analysisData.harmonic_patterns || candleData.length === 0) return;
+
+    analysisData.harmonic_patterns.forEach((pattern: any) => {
+      const { X, A, B, C, D } = pattern.points;
+      const color = pattern.bullish ? '#4CAF50' : '#F44336';
+
+      // Draw XABCD lines
+      const lines = [
+        [X, A],
+        [A, B],
+        [B, C],
+        [C, D]
+      ];
+
+      lines.forEach(([p1, p2]) => {
+        const lineSeries = chartRef.current!.addLineSeries({
+          color,
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
+
+        lineSeries.setData([
+          { time: p1.timestamp as Time, value: p1.price },
+          { time: p2.timestamp as Time, value: p2.price },
+        ]);
+
+        overlaySeriesRef.current.push(lineSeries);
+      });
+
+      // Add markers for pattern points
+      const markers = [
+        { time: X.timestamp, position: 'belowBar' as const, color, shape: 'circle' as const, text: `${pattern.type} X` },
+        { time: A.timestamp, position: 'aboveBar' as const, color, shape: 'circle' as const, text: 'A' },
+        { time: B.timestamp, position: 'belowBar' as const, color, shape: 'circle' as const, text: 'B' },
+        { time: C.timestamp, position: 'aboveBar' as const, color, shape: 'circle' as const, text: 'C' },
+        { time: D.timestamp, position: 'belowBar' as const, color, shape: 'circle' as const, text: 'D' },
+      ];
+
+      if (candlestickSeriesRef.current) {
+        candlestickSeriesRef.current.setMarkers(markers);
+      }
     });
   };
 
