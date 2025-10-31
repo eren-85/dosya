@@ -18,12 +18,12 @@ const TradingViewChart: React.FC<Props> = ({ symbol, interval }) => {
       width: chartContainerRef.current.clientWidth,
       height: 500,
       layout: {
-        background: { color: '#151B3D' },
-        textColor: '#DDD',
+        background: { color: '#ffffff' },
+        textColor: '#000000',
       },
       grid: {
-        vertLines: { color: '#2B2B43' },
-        horzLines: { color: '#2B2B43' },
+        vertLines: { color: '#e0e0e0' },
+        horzLines: { color: '#e0e0e0' },
       },
       crosshair: {
         mode: 1,
@@ -67,15 +67,32 @@ const TradingViewChart: React.FC<Props> = ({ symbol, interval }) => {
   return <Box ref={chartContainerRef} sx={{ width: '100%', height: 500 }} />;
 };
 
-// Placeholder data fetch
+// Fetch real chart data from backend API
 async function fetchChartData(symbol: string, interval: string) {
-  // In production, fetch from backend API
-  // For now, return dummy data
-  return [
-    { time: '2024-01-01', open: 65000, high: 67000, low: 64000, close: 66500 },
-    { time: '2024-01-02', open: 66500, high: 68000, low: 66000, close: 67200 },
-    // ... more data
-  ];
+  try {
+    const BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
+    const response = await fetch(
+      `${BASE}/api/data/ohlcv?symbol=${symbol}&timeframe=${interval}&limit=500`
+    );
+
+    if (!response.ok) {
+      console.error('Failed to fetch chart data:', response.statusText);
+      return [];
+    }
+
+    const result = await response.json();
+
+    if (result.status === 'success' && result.data) {
+      // Backend returns {time, open, high, low, close, volume}
+      // lightweight-charts needs the same format
+      return result.data;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error fetching chart data:', error);
+    return [];
+  }
 }
 
 export default TradingViewChart;

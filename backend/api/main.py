@@ -6,6 +6,11 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Configure logging to ensure it outputs to console
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 log = logging.getLogger("sigma.api")
 
 app = FastAPI(
@@ -67,4 +72,18 @@ def root():
         "health": "/health",
         "ready": "/ready",
         "ops": "/api/ops/ping",
+        "data": "/api/data/ohlcv?symbol=BTCUSDT&timeframe=1H&limit=10"
     }
+
+# Startup event to log all routes
+@app.on_event("startup")
+async def startup_event():
+    log.info("=" * 60)
+    log.info("Sigma Analyst API Starting Up")
+    log.info("=" * 60)
+    log.info("Available routes:")
+    for route in app.routes:
+        if hasattr(route, "methods") and hasattr(route, "path"):
+            methods = ",".join(route.methods)
+            log.info(f"  [{methods:6}] {route.path}")
+    log.info("=" * 60)

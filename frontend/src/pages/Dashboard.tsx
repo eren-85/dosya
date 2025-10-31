@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Card, CardContent, Typography, Box } from '@mui/material';
+import {
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  Box,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent
+} from '@mui/material';
 import TradingViewChart from '../components/charts/TradingViewChart';
 import MarketPulse from '../components/widgets/MarketPulse';
 import ScenarioCard from '../components/widgets/ScenarioCard';
@@ -9,8 +20,35 @@ import { useWebSocket } from '../hooks/useWebSocket';
 
 const Dashboard: React.FC = () => {
   // WebSocket disabled for now - use REST API endpoints instead
-  // TODO: Enable when backend implements WebSocket
-  const { marketData, alerts, isConnected } = useWebSocket(); // No URL = disabled
+  const { alerts, isConnected } = useWebSocket(); // No URL = disabled
+
+  // Symbol and timeframe selection
+  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [timeframe, setTimeframe] = useState('1H');
+
+  // Market data (TODO: fetch from backend API)
+  const [marketData, setMarketData] = useState({
+    symbol: 'BTCUSDT',
+    btc_price: 67234,
+    change_24h: 2.34,
+    sentiment: 'bullish',
+    confidence: 0.72,
+    volatility_regime: 'Normal',
+    funding_rate: 0.0082,
+    key_observation: 'Price consolidating above $67k support. Bullish momentum building.'
+  });
+
+  // Flow data (TODO: fetch from backend API)
+  const [flowData, setFlowData] = useState({
+    exchange_netflow: -3250000, // Negative = outflow (bullish)
+    miner_reserve_change: 1200, // Positive = accumulation
+    whale_transactions: 47,
+    stablecoin_supply_ratio: 0.08,
+    liquidations_24h: {
+      longs: 12500000,
+      shorts: 18700000
+    }
+  });
 
   const [scenarios, setScenarios] = useState([
     {
@@ -47,14 +85,49 @@ const Dashboard: React.FC = () => {
           <MarketPulse data={marketData} />
         </Grid>
         <Grid item xs={12} md={4}>
-          <FlowWidget />
+          <FlowWidget data={flowData} />
         </Grid>
 
-        {/* Main Chart */}
+        {/* Main Chart with Controls */}
         <Grid item xs={12} lg={8}>
-          <Card sx={{ height: 600 }}>
+          <Card sx={{ height: 650 }}>
             <CardContent>
-              <TradingViewChart symbol="BTCUSDT" interval="1H" />
+              {/* Chart Controls */}
+              <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Symbol</InputLabel>
+                  <Select
+                    value={symbol}
+                    label="Symbol"
+                    onChange={(e: SelectChangeEvent) => setSymbol(e.target.value)}
+                  >
+                    <MenuItem value="BTCUSDT">BTC/USDT</MenuItem>
+                    <MenuItem value="ETHUSDT">ETH/USDT</MenuItem>
+                    <MenuItem value="BNBUSDT">BNB/USDT</MenuItem>
+                    <MenuItem value="SOLUSDT">SOL/USDT</MenuItem>
+                    <MenuItem value="XRPUSDT">XRP/USDT</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Timeframe</InputLabel>
+                  <Select
+                    value={timeframe}
+                    label="Timeframe"
+                    onChange={(e: SelectChangeEvent) => setTimeframe(e.target.value)}
+                  >
+                    <MenuItem value="5m">5 Minutes</MenuItem>
+                    <MenuItem value="15m">15 Minutes</MenuItem>
+                    <MenuItem value="30m">30 Minutes</MenuItem>
+                    <MenuItem value="1H">1 Hour</MenuItem>
+                    <MenuItem value="4H">4 Hours</MenuItem>
+                    <MenuItem value="1D">1 Day</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              {/* Chart */}
+              <TradingViewChart symbol={symbol} interval={timeframe} />
             </CardContent>
           </Card>
         </Grid>

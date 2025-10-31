@@ -1,5 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Card, CardContent, Grid, Typography, Switch, FormControlLabel, Chip, Button } from '@mui/material';
+import {
+  Box,
+  Card,
+  CardContent,
+  Grid,
+  Typography,
+  Switch,
+  FormControlLabel,
+  Chip,
+  Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent
+} from '@mui/material';
 import { createChart, IChartApi, ISeriesApi, LineStyle } from 'lightweight-charts';
 import axios from 'axios';
 
@@ -102,8 +117,10 @@ const AdvancedChart: React.FC = () => {
 
   const loadChartData = async () => {
     try {
+      const BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
+
       // Fetch OHLCV data
-      const response = await axios.get(`/api/data/ohlcv`, {
+      const response = await axios.get(`${BASE}/api/data/ohlcv`, {
         params: {
           symbol: selectedSymbol,
           timeframe: selectedTimeframe,
@@ -111,23 +128,22 @@ const AdvancedChart: React.FC = () => {
         },
       });
 
-      const candles = response.data.map((c: any) => ({
-        time: c.timestamp,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
+      // Backend returns {status: 'success', data: [...]}
+      if (response.data.status === 'success' && response.data.data) {
+        const candles = response.data.data.map((c: any) => ({
+          time: c.time, // Backend returns 'time', not 'timestamp'
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }));
 
-      candlestickSeriesRef.current?.setData(candles);
+        candlestickSeriesRef.current?.setData(candles);
+      }
 
-      // Fetch advanced analysis
-      const analysisResponse = await axios.post(`/api/analysis/advanced`, {
-        symbol: selectedSymbol,
-        timeframe: selectedTimeframe,
-      });
-
-      setAnalysisData(analysisResponse.data);
+      // TODO: Fetch advanced analysis from backend
+      // For now, use mock analysis data
+      loadMockAnalysis();
     } catch (error) {
       console.error('Error loading chart data:', error);
       // Use mock data for development
@@ -136,37 +152,61 @@ const AdvancedChart: React.FC = () => {
   };
 
   const loadMockData = () => {
-    // Mock candle data
+    // Deterministic mock candle data (seed-based for consistency)
+    // Use symbol + timeframe as seed to ensure same data on refresh
+    const seedStr = `${selectedSymbol}_${selectedTimeframe}`;
+    let seed = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      seed = seed * 31 + seedStr.charCodeAt(i);
+    }
+
+    // Simple seeded random function
+    const seededRandom = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+
+    const basePrice = selectedSymbol === 'BTCUSDT' ? 67000 :
+                      selectedSymbol === 'ETHUSDT' ? 3500 :
+                      selectedSymbol === 'BNBUSDT' ? 600 : 1000;
+
     const mockCandles = [];
-    let price = 67000;
-    for (let i = 0; i < 200; i++) {
+    let price = basePrice;
+
+    for (let i = 0; i < 500; i++) {
       const open = price;
-      const high = price + Math.random() * 1000;
-      const low = price - Math.random() * 1000;
-      const close = low + Math.random() * (high - low);
+      const changePercent = (seededRandom() - 0.5) * 0.04; // ±2%
+      price = price * (1 + changePercent);
+
+      const high = open * (1 + seededRandom() * 0.01); // up to +1%
+      const low = open * (1 - seededRandom() * 0.01);  // up to -1%
+      const close = low + seededRandom() * (high - low);
 
       mockCandles.push({
-        time: Date.now() / 1000 - (200 - i) * 3600,
-        open,
-        high,
-        low,
-        close,
+        time: Math.floor(Date.now() / 1000) - (500 - i) * 3600,
+        open: Math.round(open * 100) / 100,
+        high: Math.round(high * 100) / 100,
+        low: Math.round(low * 100) / 100,
+        close: Math.round(close * 100) / 100,
       });
 
       price = close;
     }
 
     candlestickSeriesRef.current?.setData(mockCandles);
+    loadMockAnalysis();
+  };
 
+  const loadMockAnalysis = () => {
     // Mock analysis data
     setAnalysisData({
       swing_highs: [
-        { index: 50, price: 68500, timestamp: Date.now() / 1000 - 150 * 3600 },
-        { index: 120, price: 69200, timestamp: Date.now() / 1000 - 80 * 3600 },
+        { index: 50, price: 68500, timestamp: Math.floor(Date.now() / 1000) - 150 * 3600 },
+        { index: 120, price: 69200, timestamp: Math.floor(Date.now() / 1000) - 80 * 3600 },
       ],
       swing_lows: [
-        { index: 30, price: 65500, timestamp: Date.now() / 1000 - 170 * 3600 },
-        { index: 100, price: 66200, timestamp: Date.now() / 1000 - 100 * 3600 },
+        { index: 30, price: 65500, timestamp: Math.floor(Date.now() / 1000) - 170 * 3600 },
+        { index: 100, price: 66200, timestamp: Math.floor(Date.now() / 1000) - 100 * 3600 },
       ],
       fibonacci: {
         swing_high: 69200,
@@ -190,10 +230,10 @@ const AdvancedChart: React.FC = () => {
         },
       ],
       order_blocks: [
-        { price: 66800, type: 'bullish', timestamp: Date.now() / 1000 - 50 * 3600 },
+        { price: 66800, type: 'bullish', timestamp: Math.floor(Date.now() / 1000) - 50 * 3600 },
       ],
       fvg: [
-        { start: 67200, end: 67600, type: 'bullish', timestamp: Date.now() / 1000 - 30 * 3600 },
+        { start: 67200, end: 67600, type: 'bullish', timestamp: Math.floor(Date.now() / 1000) - 30 * 3600 },
       ],
     });
   };
@@ -366,7 +406,49 @@ const AdvancedChart: React.FC = () => {
                 This chart shows all detected patterns, levels, and zones. Toggle overlays below.
               </Typography>
 
+              {/* Symbol and Timeframe Selectors */}
+              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Symbol</InputLabel>
+                  <Select
+                    value={selectedSymbol}
+                    label="Symbol"
+                    onChange={(e: SelectChangeEvent) => setSelectedSymbol(e.target.value)}
+                  >
+                    <MenuItem value="BTCUSDT">BTC/USDT</MenuItem>
+                    <MenuItem value="ETHUSDT">ETH/USDT</MenuItem>
+                    <MenuItem value="BNBUSDT">BNB/USDT</MenuItem>
+                    <MenuItem value="SOLUSDT">SOL/USDT</MenuItem>
+                    <MenuItem value="XRPUSDT">XRP/USDT</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Timeframe</InputLabel>
+                  <Select
+                    value={selectedTimeframe}
+                    label="Timeframe"
+                    onChange={(e: SelectChangeEvent) => setSelectedTimeframe(e.target.value)}
+                  >
+                    <MenuItem value="5m">5 Minutes</MenuItem>
+                    <MenuItem value="15m">15 Minutes</MenuItem>
+                    <MenuItem value="30m">30 Minutes</MenuItem>
+                    <MenuItem value="1H">1 Hour</MenuItem>
+                    <MenuItem value="4H">4 Hours</MenuItem>
+                    <MenuItem value="1D">1 Day</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <Button variant="outlined" onClick={loadChartData}>
+                  Refresh Data
+                </Button>
+              </Box>
+
+              {/* Overlay Toggles */}
               <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="body2" sx={{ width: '100%', mb: 1, fontWeight: 500 }}>
+                  Overlays:
+                </Typography>
                 {Object.entries(overlays).map(([key, value]) => (
                   <Chip
                     key={key}
@@ -379,9 +461,6 @@ const AdvancedChart: React.FC = () => {
               </Box>
 
               <Box sx={{ mt: 2 }}>
-                <Button variant="outlined" onClick={loadChartData} sx={{ mr: 1 }}>
-                  Refresh Data
-                </Button>
                 <Button variant="outlined" onClick={() => alert('Manual annotation mode (coming soon)')}>
                   Manual Annotation Mode
                 </Button>
