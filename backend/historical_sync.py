@@ -2,14 +2,13 @@
 """
 Historical sync utilities.
 - Spot & Futures Binance kline indirici
-- CSV ve opsiyonel Parquet yazma
+- Parquet format ONLY (CSV deprecated and removed)
 - Mevcut dosyadan "kaldığı yerden devam" (resume)
 - Global tek progress bar (çok sembol/çok batch)
 """
 
 from __future__ import annotations
 import os
-import csv
 import math
 import time
 import json
@@ -113,36 +112,11 @@ def _fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int, market
     r.raise_for_status()
     return r.json()
 
-def _csv_path(base_dir: str, symbol: str, interval: str, market: str) -> str:
-    return os.path.join(base_dir, f"{symbol}_{interval}_{market}.csv")
-
 def _parquet_path(base_dir: str, symbol: str, interval: str, market: str) -> str:
     return os.path.join(base_dir, f"{symbol}_{interval}_{market}.parquet")
 
-def _last_close_ms_from_csv(path: str) -> Optional[int]:
-    if not os.path.exists(path) or os.path.getsize(path) == 0:
-        return None
-    last = None
-    with open(path, "r", newline="", encoding="utf-8") as f:
-        rd = csv.reader(f)
-        header = next(rd, None)
-        # CSV formatı: open_time,open,high,low,close,volume,close_time, ...
-        for row in rd:
-            if not row:
-                continue
-            # close_time = row[6]
-            try:
-                close_ms = int(float(row[6]))
-                last = close_ms
-            except Exception:
-                # fallback: open_time
-                try:
-                    last = int(float(row[0])) + (INTERVAL_MS.get(row[1], 0))
-                except Exception:
-                    pass
-    return last
-
 def _last_close_ms_from_parquet(path: str) -> Optional[int]:
+    """Get last close_time from Parquet file"""
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         return None
     pd = _lazy_pd()
@@ -160,48 +134,37 @@ def _last_close_ms_from_parquet(path: str) -> Optional[int]:
     return None
 
 def _read_resume_point(base_dir: str, symbol: str, interval: str, market: str) -> Optional[int]:
+    """Read resume point from Parquet file only"""
     p_parq = _parquet_path(base_dir, symbol, interval, market)
-    p_csv = _csv_path(base_dir, symbol, interval, market)
-    last = _last_close_ms_from_parquet(p_parq)
-    if last is None:
-        last = _last_close_ms_from_csv(p_csv)
-    return last
+    return _last_close_ms_from_parquet(p_parq)
 
-def _append_csv(path: str, rows: List[list]) -> int:
+def _append_parquet(parquet_path: str, rows: List[list]) -> int:
+    """Append new data rows to Parquet file"""
     if not rows:
         return 0
-    _ensure_dir(path)
-    write_header = not os.path.exists(path) or os.path.getsize(path) == 0
-    with open(path, "a", newline="", encoding="utf-8") as f:
-        wr = csv.writer(f)
-        if write_header:
-            wr.writerow(["open_time","open","high","low","close","volume","close_time","quote_asset_volume","trades","taker_base","taker_quote","ignore"])
-        for k in rows:
-            wr.writerow(k[:12])
-    return len(rows)
 
-def _save_parquet_full(path: str, csv_path: str) -> None:
     pd = _lazy_pd()
     if pd is None:
-        return
-    df = pd.read_csv(csv_path)
-    _ensure_dir(path)
-    df.to_parquet(path, index=False)
+        print("⚠️  pandas not installed. Cannot save Parquet.")
+        return 0
 
-def _append_parquet_incremental(parquet_path: str, added_csv_rows: List[list]) -> None:
-    pd = _lazy_pd()
-    if pd is None or not added_csv_rows:
-        return
-    import pandas as pd2  # not strictly needed—just alias
     cols = ["open_time","open","high","low","close","volume","close_time","quote_asset_volume","trades","taker_base","taker_quote","ignore"]
-    new_df = pd.DataFrame(added_csv_rows, columns=cols)
+    new_df = pd.DataFrame(rows, columns=cols)
+
+    # Append to existing or create new
     if os.path.exists(parquet_path) and os.path.getsize(parquet_path) > 0:
-        old = pd.read_parquet(parquet_path, engine="pyarrow")
-        df = pd.concat([old, new_df], ignore_index=True)
+        try:
+            old = pd.read_parquet(parquet_path, engine="pyarrow")
+            df = pd.concat([old, new_df], ignore_index=True)
+        except Exception as e:
+            print(f"⚠️  Could not read existing Parquet: {e}. Creating new file.")
+            df = new_df
     else:
         df = new_df
+
     _ensure_dir(parquet_path)
-    df.to_parquet(parquet_path, index=False)
+    df.to_parquet(parquet_path, index=False, engine="pyarrow")
+    return len(rows)
 
 def _estimate_batches(start_ms: int, end_ms: int, interval: str, limit: int = 1000) -> int:
     if start_ms >= end_ms:
@@ -266,7 +229,6 @@ def sync_historical(
         first_seen = None
         last_seen = None
         added = 0
-        csv_path = _csv_path(base_dir, sym, interval, market)
         parquet_path = _parquet_path(base_dir, sym, interval, market)
 
         cur = s_ms if (all_time or s_ms > 0) else 0
@@ -287,9 +249,8 @@ def sync_historical(
                 cur = batch_end + 1
                 continue
 
-            added += _append_csv(csv_path, rows)
-            if parquet:
-                _append_parquet_incremental(parquet_path, rows)
+            # Save to Parquet only (CSV removed)
+            added += _append_parquet(parquet_path, rows)
 
             if first_seen is None and rows:
                 first_seen = int(rows[0][6])
@@ -303,11 +264,7 @@ def sync_historical(
             time.sleep(0.05)
 
         if added > 0:
-            # Note: CSV is kept for backward compatibility only
-            print(f"💾 Saved CSV: {os.path.abspath(csv_path)}")
-            if parquet:
-                print(f"💾 Saved Parquet: {os.path.abspath(parquet_path)}")
-                print(f"   ⚠️  CSV format is deprecated. Use Parquet for better performance.")
+            print(f"💾 Saved Parquet: {os.path.abspath(parquet_path)} ({added} rows)")
         else:
             print(f"✅ {sym}: up to date. Nothing to append.")
 
