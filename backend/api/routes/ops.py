@@ -20,14 +20,14 @@ class DownloadReq(BaseModel):
     all_time: bool = False
     start_date: Optional[str] = None  # "YYYY-MM-DD"
     end_date: Optional[str] = None    # "YYYY-MM-DD"
-    parquet: bool = False
+    parquet: bool = True  # Default to Parquet (CSV is deprecated)
 
 
 class SyncReq(BaseModel):
     symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT", "ETHUSDT"]])
     interval: str = Field(..., examples=["4h"])
     market: str = Field(..., pattern="^(spot|futures)$", examples=["spot"])
-    parquet: bool = False
+    parquet: bool = True  # Default to Parquet (CSV is deprecated)
 
 
 class TrainReq(BaseModel):
@@ -61,7 +61,17 @@ class OneShotReq(BaseModel):
 # ---------- Helpers ----------
 def _run(args: list[str], timeout: int = 300) -> dict:
     """
-    Run subprocess with timeout (default 5 minutes)
+    Run subprocess with timeout
+
+    Args:
+        args: Command arguments to run
+        timeout: Timeout in seconds (default 5 minutes)
+                 - Quick operations: 300s (5 min)
+                 - Data sync/download: 1800s (30 min)
+                 - Training: 3600s+ (1 hour+)
+
+    Returns:
+        dict with ok, returncode, args, stdout, stderr
     """
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
@@ -122,7 +132,10 @@ def download(req: DownloadReq):
         args.extend(["--end-date", req.end_date])
     if req.parquet:
         args.append("--parquet")
-    return _run(args)
+
+    # Use longer timeout for download operations (30 minutes)
+    # ALL-TIME downloads can take a while for multiple symbols
+    return _run(args, timeout=1800)
 
 
 @router.post("/sync")
@@ -136,7 +149,10 @@ def sync(req: SyncReq):
     ]
     if req.parquet:
         args.append("--parquet")
-    return _run(args)
+
+    # Use longer timeout for sync operations (30 minutes)
+    # Syncing multiple symbols can take a while
+    return _run(args, timeout=1800)
 
 
 @router.post("/train")
