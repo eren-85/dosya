@@ -251,35 +251,35 @@ const AdvancedChart: React.FC = () => {
         }
       }
 
-    // Calculate Fibonacci levels from recent swing high/low
-    const recentSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : { price: maxPrice };
-    const recentSwingLow = swingLows.length > 0 ? swingLows[swingLows.length - 1] : { price: minPrice };
+      // Calculate Fibonacci levels from recent swing high/low
+      const recentSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : { price: maxPrice };
+      const recentSwingLow = swingLows.length > 0 ? swingLows[swingLows.length - 1] : { price: minPrice };
 
-    const fibHigh = Math.max(recentSwingHigh.price, recentSwingLow.price);
-    const fibLow = Math.min(recentSwingHigh.price, recentSwingLow.price);
-    const fibRange = fibHigh - fibLow;
+      const fibHigh = Math.max(recentSwingHigh.price, recentSwingLow.price);
+      const fibLow = Math.min(recentSwingHigh.price, recentSwingLow.price);
+      const fibRange = fibHigh - fibLow;
 
-    // Calculate support/resistance levels (price levels with multiple touches)
-    const supportResistance: any[] = [];
-    const priceRounded = prices.map(p => Math.round(p / (priceRange * 0.01)) * (priceRange * 0.01));
-    const priceCounts: { [key: number]: number } = {};
+      // Calculate support/resistance levels (price levels with multiple touches)
+      const supportResistance: any[] = [];
+      const priceRounded = prices.map(p => Math.round(p / (priceRange * 0.01)) * (priceRange * 0.01));
+      const priceCounts: { [key: number]: number } = {};
 
-    priceRounded.forEach(p => {
-      priceCounts[p] = (priceCounts[p] || 0) + 1;
-    });
-
-    Object.entries(priceCounts)
-      .filter(([_, count]) => count >= 5)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .forEach(([price, count]) => {
-        const currentPrice = prices[prices.length - 1];
-        supportResistance.push({
-          level: parseFloat(price),
-          type: parseFloat(price) < currentPrice ? 'support' : 'resistance',
-          strength: Math.min(count / 5, 5)
-        });
+      priceRounded.forEach(p => {
+        priceCounts[p] = (priceCounts[p] || 0) + 1;
       });
+
+      Object.entries(priceCounts)
+        .filter(([_, count]) => count >= 5)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .forEach(([price, count]) => {
+          const currentPrice = prices[prices.length - 1];
+          supportResistance.push({
+            level: parseFloat(price),
+            type: parseFloat(price) < currentPrice ? 'support' : 'resistance',
+            strength: Math.min(count / 5, 5)
+          });
+        });
 
       // Detect order blocks (strong bullish/bearish candles)
       const orderBlocks: any[] = [];
@@ -349,71 +349,71 @@ const AdvancedChart: React.FC = () => {
           });
         }
       }
-    }
+      }
 
-    // Detect Trend Lines (connect swing highs and lows)
-    const trendLines: any[] = [];
-    if (swingHighs.length >= 2) {
-      // Downtrend line from recent 2 swing highs
-      const sh1 = swingHighs[swingHighs.length - 2];
-      const sh2 = swingHighs[swingHighs.length - 1];
-      trendLines.push({
-        type: 'resistance',
-        point1: { time: sh1.timestamp, price: sh1.price },
-        point2: { time: sh2.timestamp, price: sh2.price }
-      });
-    }
-    if (swingLows.length >= 2) {
-      // Uptrend line from recent 2 swing lows
-      const sl1 = swingLows[swingLows.length - 2];
-      const sl2 = swingLows[swingLows.length - 1];
-      trendLines.push({
-        type: 'support',
-        point1: { time: sl1.timestamp, price: sl1.price },
-        point2: { time: sl2.timestamp, price: sl2.price }
-      });
-    }
-
-    // Calculate RSI for divergence detection
-    const rsi = calculateRSI(prices, 14);
-
-    // Detect RSI Divergences
-    const divergences: any[] = [];
-    // Bullish divergence: Price makes lower low, RSI makes higher low
-    for (let i = 1; i < swingLows.length; i++) {
-      const prevLow = swingLows[i - 1];
-      const currLow = swingLows[i];
-      const prevRSI = rsi[prevLow.index];
-      const currRSI = rsi[currLow.index];
-
-      if (currLow.price < prevLow.price && currRSI > prevRSI) {
-        divergences.push({
-          type: 'bullish',
-          point1: { time: prevLow.timestamp, price: prevLow.price },
-          point2: { time: currLow.timestamp, price: currLow.price },
-          rsi1: prevRSI,
-          rsi2: currRSI
+      // Detect Trend Lines (connect swing highs and lows)
+      const trendLines: any[] = [];
+      if (swingHighs.length >= 2) {
+        // Downtrend line from recent 2 swing highs
+        const sh1 = swingHighs[swingHighs.length - 2];
+        const sh2 = swingHighs[swingHighs.length - 1];
+        trendLines.push({
+          type: 'resistance',
+          point1: { time: sh1.timestamp, price: sh1.price },
+          point2: { time: sh2.timestamp, price: sh2.price }
         });
       }
-    }
-
-    // Bearish divergence: Price makes higher high, RSI makes lower high
-    for (let i = 1; i < swingHighs.length; i++) {
-      const prevHigh = swingHighs[i - 1];
-      const currHigh = swingHighs[i];
-      const prevRSI = rsi[prevHigh.index];
-      const currRSI = rsi[currHigh.index];
-
-      if (currHigh.price > prevHigh.price && currRSI < prevRSI) {
-        divergences.push({
-          type: 'bearish',
-          point1: { time: prevHigh.timestamp, price: prevHigh.price },
-          point2: { time: currHigh.timestamp, price: currHigh.price },
-          rsi1: prevRSI,
-          rsi2: currRSI
+      if (swingLows.length >= 2) {
+        // Uptrend line from recent 2 swing lows
+        const sl1 = swingLows[swingLows.length - 2];
+        const sl2 = swingLows[swingLows.length - 1];
+        trendLines.push({
+          type: 'support',
+          point1: { time: sl1.timestamp, price: sl1.price },
+          point2: { time: sl2.timestamp, price: sl2.price }
         });
       }
-    }
+
+      // Calculate RSI for divergence detection
+      const rsi = calculateRSI(prices, 14);
+
+      // Detect RSI Divergences
+      const divergences: any[] = [];
+      // Bullish divergence: Price makes lower low, RSI makes higher low
+      for (let i = 1; i < swingLows.length; i++) {
+        const prevLow = swingLows[i - 1];
+        const currLow = swingLows[i];
+        const prevRSI = rsi[prevLow.index];
+        const currRSI = rsi[currLow.index];
+
+        if (currLow.price < prevLow.price && currRSI > prevRSI) {
+          divergences.push({
+            type: 'bullish',
+            point1: { time: prevLow.timestamp, price: prevLow.price },
+            point2: { time: currLow.timestamp, price: currLow.price },
+            rsi1: prevRSI,
+            rsi2: currRSI
+          });
+        }
+      }
+
+      // Bearish divergence: Price makes higher high, RSI makes lower high
+      for (let i = 1; i < swingHighs.length; i++) {
+        const prevHigh = swingHighs[i - 1];
+        const currHigh = swingHighs[i];
+        const prevRSI = rsi[prevHigh.index];
+        const currRSI = rsi[currHigh.index];
+
+        if (currHigh.price > prevHigh.price && currRSI < prevRSI) {
+          divergences.push({
+            type: 'bearish',
+            point1: { time: prevHigh.timestamp, price: prevHigh.price },
+            point2: { time: currHigh.timestamp, price: currHigh.price },
+            rsi1: prevRSI,
+            rsi2: currRSI
+          });
+        }
+      }
 
       // Detect Harmonic Patterns (simplified Gartley, Bat, Butterfly)
       // Limit to last 20 swing points for performance
