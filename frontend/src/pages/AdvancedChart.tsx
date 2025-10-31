@@ -44,12 +44,12 @@ const AdvancedChart: React.FC = () => {
       width: chartContainerRef.current.clientWidth,
       height: 700,
       layout: {
-        background: { color: '#0A0E27' },
-        textColor: '#DDD',
+        background: { color: '#ffffff' },
+        textColor: '#000000',
       },
       grid: {
-        vertLines: { color: '#1E2A3A' },
-        horzLines: { color: '#1E2A3A' },
+        vertLines: { color: '#e0e0e0' },
+        horzLines: { color: '#e0e0e0' },
       },
       crosshair: {
         mode: 1,
@@ -329,6 +329,9 @@ const AdvancedChart: React.FC = () => {
         text: 'SL',
       });
     });
+
+    // Sort markers by time (REQUIRED by lightweight-charts)
+    markers.sort((a, b) => a.time - b.time);
 
     candlestickSeriesRef.current?.setMarkers(markers);
   };
