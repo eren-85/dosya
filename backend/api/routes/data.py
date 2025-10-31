@@ -4,13 +4,145 @@ Data API endpoints for charts and market data
 """
 from __future__ import annotations
 
+import os
 import random
+import logging
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Query
+import pandas as pd
+import requests
+from fastapi import APIRouter, Query, HTTPException
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/data", tags=["data"])
+
+# Data directory
+DATA_DIR = Path("/app/data/historical") if os.path.exists("/app/data/historical") else Path("data/historical")
+
+
+def read_historical_data(
+    symbol: str,
+    timeframe: str,
+    market_type: str = "futures",
+    limit: int = 500
+) -> Optional[List[Dict[str, Any]]]:
+    """
+    Read historical OHLCV data from parquet files
+
+    File naming: {SYMBOL}_{TIMEFRAME}_{MARKET_TYPE}.parquet
+    Example: BTCUSDT_1d_futures.parquet
+    """
+    # Normalize timeframe
+    tf_map = {
+        "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
+        "1h": "1h", "1H": "1h", "2h": "2h", "4h": "4h", "4H": "4h",
+        "6h": "6h", "12h": "12h", "1d": "1d", "1D": "1d",
+        "3d": "3d", "1w": "1w", "1W": "1w", "1M": "1M"
+    }
+
+    normalized_tf = tf_map.get(timeframe, timeframe.lower())
+
+    # Try to find the file
+    filename = f"{symbol}_{normalized_tf}_{market_type}.parquet"
+    filepath = DATA_DIR / filename
+
+    log.info(f"Attempting to read: {filepath}")
+
+    if not filepath.exists():
+        log.warning(f"File not found: {filepath}")
+        return None
+
+    try:
+        # Read parquet file
+        df = pd.read_parquet(filepath)
+
+        # Get last N candles
+        df = df.tail(limit)
+
+        # Convert to list of dicts for API response
+        candles = []
+        for idx, row in df.iterrows():
+            # Handle datetime index
+            if isinstance(idx, pd.Timestamp):
+                timestamp = int(idx.timestamp())
+            else:
+                # If not datetime index, check for timestamp column
+                timestamp = int(row.get('timestamp', row.get('open_time', pd.Timestamp.now().timestamp())))
+
+            candles.append({
+                "time": timestamp,
+                "open": float(row.get('open', row.get('Open', 0))),
+                "high": float(row.get('high', row.get('High', 0))),
+                "low": float(row.get('low', row.get('Low', 0))),
+                "close": float(row.get('close', row.get('Close', 0))),
+                "volume": float(row.get('volume', row.get('Volume', 0))),
+            })
+
+        log.info(f"Successfully read {len(candles)} candles from {filename}")
+        return candles
+
+    except Exception as e:
+        log.error(f"Error reading {filepath}: {e}")
+        return None
+
+
+def fetch_binance_live_data(
+    symbol: str,
+    timeframe: str,
+    market_type: str = "futures",
+    limit: int = 500
+) -> Optional[List[Dict[str, Any]]]:
+    """
+    Fetch live data from Binance API as fallback
+    """
+    try:
+        # Binance API endpoint
+        if market_type == "futures":
+            base_url = "https://fapi.binance.com/fapi/v1/klines"
+        else:
+            base_url = "https://api.binance.com/api/v3/klines"
+
+        # Binance interval format
+        interval_map = {
+            "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
+            "1h": "1h", "1H": "1h", "2h": "2h", "4h": "4h", "4H": "4h",
+            "6h": "6h", "8h": "8h", "12h": "12h",
+            "1d": "1d", "1D": "1d", "3d": "3d",
+            "1w": "1w", "1W": "1w", "1M": "1M"
+        }
+
+        interval = interval_map.get(timeframe, "1h")
+
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "limit": min(limit, 1000)  # Binance max is 1000
+        }
+
+        response = requests.get(base_url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        candles = []
+        for item in data:
+            candles.append({
+                "time": int(item[0] / 1000),  # Binance returns ms
+                "open": float(item[1]),
+                "high": float(item[2]),
+                "low": float(item[3]),
+                "close": float(item[4]),
+                "volume": float(item[5]),
+            })
+
+        log.info(f"Fetched {len(candles)} candles from Binance API")
+        return candles
+
+    except Exception as e:
+        log.error(f"Error fetching from Binance: {e}")
+        return None
 
 
 def generate_mock_ohlcv(
@@ -20,7 +152,7 @@ def generate_mock_ohlcv(
 ) -> List[Dict[str, Any]]:
     """
     Generate mock OHLCV data for testing UI
-    TODO: Replace with real data from database/files
+    FALLBACK ONLY - Used when no historical data available
     """
     # Base price for different symbols
     base_prices = {
@@ -83,25 +215,60 @@ def generate_mock_ohlcv(
 async def get_ohlcv(
     symbol: str = Query(..., description="Trading symbol (e.g., BTCUSDT)"),
     timeframe: str = Query(..., description="Timeframe (e.g., 1H, 4H, 1D)"),
+    market_type: str = Query("futures", description="Market type: futures or spot"),
     limit: int = Query(500, ge=1, le=5000, description="Number of candles")
 ) -> Dict[str, Any]:
     """
     Get OHLCV candlestick data for charts
 
-    Returns mock data for now. Real implementation will read from:
-    - data/historical/*.parquet files
-    - OR PostgreSQL database
+    Priority:
+    1. Read from local parquet files (data/historical/*.parquet)
+    2. Fetch live data from Binance API
+    3. Generate mock data (fallback)
     """
 
+    # Try to read from historical files first
+    candles = read_historical_data(symbol, timeframe, market_type, limit)
+
+    if candles:
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "market_type": market_type,
+            "data": candles,
+            "count": len(candles),
+            "source": "historical_file"
+        }
+
+    # Try to fetch live data from Binance
+    log.info(f"No historical data found, fetching live data from Binance")
+    candles = fetch_binance_live_data(symbol, timeframe, market_type, limit)
+
+    if candles:
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "market_type": market_type,
+            "data": candles,
+            "count": len(candles),
+            "source": "binance_live"
+        }
+
+    # Fallback to mock data
+    log.warning(f"No data available, generating mock data for {symbol} {timeframe}")
     candles = generate_mock_ohlcv(symbol, timeframe, limit)
 
     return {
         "status": "success",
         "symbol": symbol,
         "timeframe": timeframe,
+        "market_type": market_type,
         "data": candles,
         "count": len(candles),
-        "note": "Mock data - real implementation will read from historical files"
+        "source": "mock_data",
+        "note": "Using mock data - download real data or check Binance API connection"
     }
 
 
@@ -130,14 +297,12 @@ async def get_symbols() -> Dict[str, Any]:
 async def get_timeframes(symbol: Optional[str] = None) -> Dict[str, Any]:
     """
     Get available timeframes for a symbol
-    TODO: Check which timeframes exist in historical data
     """
     return {
         "status": "success",
         "timeframes": [
-            "5m", "15m", "30m",
+            "1m", "3m", "5m", "15m", "30m",
             "1h", "2h", "4h", "6h", "12h",
-            "1d", "3d", "1w"
-        ],
-        "note": "Mock data - real implementation will check available files"
+            "1d", "3d", "1w", "1M"
+        ]
     }

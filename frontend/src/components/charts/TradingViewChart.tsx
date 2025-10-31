@@ -5,9 +5,10 @@ import { Box } from '@mui/material';
 interface Props {
   symbol: string;
   interval: string;
+  marketType?: string; // 'futures' or 'spot'
 }
 
-const TradingViewChart: React.FC<Props> = ({ symbol, interval }) => {
+const TradingViewChart: React.FC<Props> = ({ symbol, interval, marketType = 'futures' }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -42,8 +43,8 @@ const TradingViewChart: React.FC<Props> = ({ symbol, interval }) => {
       wickDownColor: '#FF6B6B',
     });
 
-    // Fetch and set data (placeholder)
-    fetchChartData(symbol, interval).then((data) => {
+    // Fetch and set data
+    fetchChartData(symbol, interval, marketType).then((data) => {
       candlestickSeries.setData(data);
     });
 
@@ -62,17 +63,17 @@ const TradingViewChart: React.FC<Props> = ({ symbol, interval }) => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [symbol, interval]);
+  }, [symbol, interval, marketType]);
 
   return <Box ref={chartContainerRef} sx={{ width: '100%', height: 500 }} />;
 };
 
 // Fetch real chart data from backend API
-async function fetchChartData(symbol: string, interval: string) {
+async function fetchChartData(symbol: string, interval: string, marketType: string = 'futures') {
   try {
     const BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
     const response = await fetch(
-      `${BASE}/api/data/ohlcv?symbol=${symbol}&timeframe=${interval}&limit=500`
+      `${BASE}/api/data/ohlcv?symbol=${symbol}&timeframe=${interval}&market_type=${marketType}&limit=500`
     );
 
     if (!response.ok) {

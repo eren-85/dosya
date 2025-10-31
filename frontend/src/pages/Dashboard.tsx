@@ -22,9 +22,10 @@ const Dashboard: React.FC = () => {
   // WebSocket disabled for now - use REST API endpoints instead
   const { alerts, isConnected } = useWebSocket(); // No URL = disabled
 
-  // Symbol and timeframe selection
+  // Symbol, timeframe, and market type selection
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeframe, setTimeframe] = useState('1H');
+  const [marketType, setMarketType] = useState('futures'); // 'futures' or 'spot'
 
   // Market data (TODO: fetch from backend API)
   const [marketData, setMarketData] = useState({
@@ -93,7 +94,7 @@ const Dashboard: React.FC = () => {
           <Card sx={{ height: 650 }}>
             <CardContent>
               {/* Chart Controls */}
-              <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                   <InputLabel>Symbol</InputLabel>
                   <Select
@@ -110,24 +111,39 @@ const Dashboard: React.FC = () => {
                 </FormControl>
 
                 <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Market</InputLabel>
+                  <Select
+                    value={marketType}
+                    label="Market"
+                    onChange={(e: SelectChangeEvent) => setMarketType(e.target.value)}
+                  >
+                    <MenuItem value="futures">Futures</MenuItem>
+                    <MenuItem value="spot">Spot</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 130 }}>
                   <InputLabel>Timeframe</InputLabel>
                   <Select
                     value={timeframe}
                     label="Timeframe"
                     onChange={(e: SelectChangeEvent) => setTimeframe(e.target.value)}
                   >
+                    <MenuItem value="1m">1 Minute</MenuItem>
                     <MenuItem value="5m">5 Minutes</MenuItem>
                     <MenuItem value="15m">15 Minutes</MenuItem>
                     <MenuItem value="30m">30 Minutes</MenuItem>
                     <MenuItem value="1H">1 Hour</MenuItem>
                     <MenuItem value="4H">4 Hours</MenuItem>
                     <MenuItem value="1D">1 Day</MenuItem>
+                    <MenuItem value="1w">1 Week</MenuItem>
+                    <MenuItem value="1M">1 Month</MenuItem>
                   </Select>
                 </FormControl>
               </Box>
 
               {/* Chart */}
-              <TradingViewChart symbol={symbol} interval={timeframe} />
+              <TradingViewChart symbol={symbol} interval={timeframe} marketType={marketType} />
             </CardContent>
           </Card>
         </Grid>
