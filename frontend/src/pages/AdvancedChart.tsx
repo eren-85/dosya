@@ -211,39 +211,45 @@ const AdvancedChart: React.FC = () => {
   };
 
   const generateAnalysis = (candles: any[]) => {
-    if (candles.length < 50) {
-      setAnalysisData(null);
-      return;
-    }
-
-    // Calculate analysis from real candle data
-    const prices = candles.map(c => c.close);
-    const highs = candles.map(c => c.high);
-    const lows = candles.map(c => c.low);
-
-    const maxPrice = Math.max(...prices);
-    const minPrice = Math.min(...prices);
-    const priceRange = maxPrice - minPrice;
-
-    // Find swing highs and lows (local maxima/minima)
-    const swingHighs: any[] = [];
-    const swingLows: any[] = [];
-    const lookback = 10;
-
-    for (let i = lookback; i < candles.length - lookback; i++) {
-      const isSwingHigh = highs.slice(i - lookback, i).every(h => h <= highs[i]) &&
-                          highs.slice(i + 1, i + lookback + 1).every(h => h < highs[i]);
-
-      const isSwingLow = lows.slice(i - lookback, i).every(l => l >= lows[i]) &&
-                         lows.slice(i + 1, i + lookback + 1).every(l => l > lows[i]);
-
-      if (isSwingHigh) {
-        swingHighs.push({ index: i, price: highs[i], timestamp: candles[i].time });
+    try {
+      if (candles.length < 50) {
+        setAnalysisData(null);
+        return;
       }
-      if (isSwingLow) {
-        swingLows.push({ index: i, price: lows[i], timestamp: candles[i].time });
+
+      // For ALL TIME data, use only recent candles for analysis (last 2000)
+      // This prevents performance issues and stack overflow
+      const recentCandles = candles.length > 2000 ? candles.slice(-2000) : candles;
+
+      // Calculate analysis from real candle data
+      const prices = recentCandles.map(c => c.close);
+      const highs = recentCandles.map(c => c.high);
+      const lows = recentCandles.map(c => c.low);
+
+      // Use reduce instead of spread operator to avoid stack overflow
+      const maxPrice = prices.reduce((max, p) => Math.max(max, p), -Infinity);
+      const minPrice = prices.reduce((min, p) => Math.min(min, p), Infinity);
+      const priceRange = maxPrice - minPrice;
+
+      // Find swing highs and lows (local maxima/minima)
+      const swingHighs: any[] = [];
+      const swingLows: any[] = [];
+      const lookback = 10;
+
+      for (let i = lookback; i < recentCandles.length - lookback; i++) {
+        const isSwingHigh = highs.slice(i - lookback, i).every(h => h <= highs[i]) &&
+                            highs.slice(i + 1, i + lookback + 1).every(h => h < highs[i]);
+
+        const isSwingLow = lows.slice(i - lookback, i).every(l => l >= lows[i]) &&
+                           lows.slice(i + 1, i + lookback + 1).every(l => l > lows[i]);
+
+        if (isSwingHigh) {
+          swingHighs.push({ index: i, price: highs[i], timestamp: recentCandles[i].time });
+        }
+        if (isSwingLow) {
+          swingLows.push({ index: i, price: lows[i], timestamp: recentCandles[i].time });
+        }
       }
-    }
 
     // Calculate Fibonacci levels from recent swing high/low
     const recentSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : { price: maxPrice };
@@ -275,42 +281,42 @@ const AdvancedChart: React.FC = () => {
         });
       });
 
-    // Detect order blocks (strong bullish/bearish candles)
-    const orderBlocks: any[] = [];
-    for (let i = 1; i < candles.length; i++) {
-      const candle = candles[i];
-      const prevCandle = candles[i - 1];
-      const bodySize = Math.abs(candle.close - candle.open);
-      const prevBodySize = Math.abs(prevCandle.close - prevCandle.open);
+      // Detect order blocks (strong bullish/bearish candles)
+      const orderBlocks: any[] = [];
+      for (let i = 1; i < recentCandles.length; i++) {
+        const candle = recentCandles[i];
+        const prevCandle = recentCandles[i - 1];
+        const bodySize = Math.abs(candle.close - candle.open);
+        const prevBodySize = Math.abs(prevCandle.close - prevCandle.open);
 
-      // Strong bullish candle after bearish
-      if (bodySize > prevBodySize * 2 && candle.close > candle.open && prevCandle.close < prevCandle.open) {
-        orderBlocks.push({
-          high: candle.high,
-          low: candle.low,
-          type: 'bullish',
-          timestamp: candle.time
-        });
+        // Strong bullish candle after bearish
+        if (bodySize > prevBodySize * 2 && candle.close > candle.open && prevCandle.close < prevCandle.open) {
+          orderBlocks.push({
+            high: candle.high,
+            low: candle.low,
+            type: 'bullish',
+            timestamp: candle.time
+          });
+        }
+
+        // Strong bearish candle after bullish
+        if (bodySize > prevBodySize * 2 && candle.close < candle.open && prevCandle.close > prevCandle.open) {
+          orderBlocks.push({
+            high: candle.high,
+            low: candle.low,
+            type: 'bearish',
+            timestamp: candle.time
+          });
+        }
       }
 
-      // Strong bearish candle after bullish
-      if (bodySize > prevBodySize * 2 && candle.close < candle.open && prevCandle.close > prevCandle.open) {
-        orderBlocks.push({
-          high: candle.high,
-          low: candle.low,
-          type: 'bearish',
-          timestamp: candle.time
-        });
-      }
-    }
-
-    // Detect Fair Value Gaps (FVG) - 3-candle pattern with gap
-    // FVG occurs when middle candle's wick doesn't overlap with candle 1 and 3
-    const fvg: any[] = [];
-    for (let i = 2; i < candles.length; i++) {
-      const candle1 = candles[i - 2];
-      const candle2 = candles[i - 1];
-      const candle3 = candles[i];
+      // Detect Fair Value Gaps (FVG) - 3-candle pattern with gap
+      // FVG occurs when middle candle's wick doesn't overlap with candle 1 and 3
+      const fvg: any[] = [];
+      for (let i = 2; i < recentCandles.length; i++) {
+        const candle1 = recentCandles[i - 2];
+        const candle2 = recentCandles[i - 1];
+        const candle3 = recentCandles[i];
 
       // Bullish FVG: gap above (candle1 high < candle3 low)
       // Strong buying pressure, price jumped up leaving a gap
@@ -409,27 +415,31 @@ const AdvancedChart: React.FC = () => {
       }
     }
 
-    // Detect Harmonic Patterns (simplified Gartley, Bat, Butterfly, Crab)
-    const harmonicPatterns: any[] = [];
-    if (swingHighs.length >= 2 && swingLows.length >= 2) {
-      // Find XABCD pattern
-      for (let i = 0; i < swingLows.length - 1; i++) {
-        const X = swingLows[i];
-        for (let j = i + 1; j < swingHighs.length; j++) {
-          const A = swingHighs[j];
-          if (A.index <= X.index) continue;
+      // Detect Harmonic Patterns (simplified Gartley, Bat, Butterfly)
+      // Limit to last 20 swing points for performance
+      const harmonicPatterns: any[] = [];
+      const recentSwingHighs = swingHighs.slice(-20);
+      const recentSwingLows = swingLows.slice(-20);
 
-          for (let k = j + 1; k < swingLows.length; k++) {
-            const B = swingLows[k];
-            if (B.index <= A.index) continue;
+      if (recentSwingHighs.length >= 2 && recentSwingLows.length >= 2) {
+        // Find XABCD pattern - only check last few swing points
+        for (let i = 0; i < Math.min(recentSwingLows.length - 1, 10); i++) {
+          const X = recentSwingLows[i];
+          for (let j = i + 1; j < Math.min(recentSwingHighs.length, i + 10); j++) {
+            const A = recentSwingHighs[j];
+            if (A.index <= X.index) continue;
 
-            for (let l = k + 1; l < swingHighs.length; l++) {
-              const C = swingHighs[l];
-              if (C.index <= B.index) continue;
+            for (let k = j + 1; k < Math.min(recentSwingLows.length, j + 10); k++) {
+              const B = recentSwingLows[k];
+              if (B.index <= A.index) continue;
 
-              for (let m = l + 1; m < swingLows.length; m++) {
-                const D = swingLows[m];
-                if (D.index <= C.index) continue;
+              for (let l = k + 1; l < Math.min(recentSwingHighs.length, k + 10); l++) {
+                const C = recentSwingHighs[l];
+                if (C.index <= B.index) continue;
+
+                for (let m = l + 1; m < Math.min(recentSwingLows.length, l + 10); m++) {
+                  const D = recentSwingLows[m];
+                  if (D.index <= C.index) continue;
 
                 // Calculate Fibonacci ratios
                 const XA = A.price - X.price;
@@ -486,29 +496,33 @@ const AdvancedChart: React.FC = () => {
       }
     }
 
-    setAnalysisData({
-      swing_highs: swingHighs,
-      swing_lows: swingLows,
-      fibonacci: {
-        swing_high: fibHigh,
-        swing_low: fibLow,
-        level_236: fibLow + fibRange * 0.236,
-        level_382: fibLow + fibRange * 0.382,
-        level_500: fibLow + fibRange * 0.500,
-        level_618: fibLow + fibRange * 0.618,
-        level_786: fibLow + fibRange * 0.786,
-        golden_zone_low: fibLow + fibRange * 0.618,
-        golden_zone_high: fibLow + fibRange * 0.66,
-        ote_low: fibLow + fibRange * 0.295,
-        ote_high: fibLow + fibRange * 0.705,
-      },
-      support_resistance: supportResistance,
-      order_blocks: orderBlocks.slice(-10), // Last 10
-      fvg: fvg.slice(-10), // Last 10
-      trend_lines: trendLines,
-      divergences: divergences.slice(-5), // Last 5
-      harmonic_patterns: harmonicPatterns.slice(0, 3), // First 3
-    });
+      setAnalysisData({
+        swing_highs: swingHighs,
+        swing_lows: swingLows,
+        fibonacci: {
+          swing_high: fibHigh,
+          swing_low: fibLow,
+          level_236: fibLow + fibRange * 0.236,
+          level_382: fibLow + fibRange * 0.382,
+          level_500: fibLow + fibRange * 0.500,
+          level_618: fibLow + fibRange * 0.618,
+          level_786: fibLow + fibRange * 0.786,
+          golden_zone_low: fibLow + fibRange * 0.618,
+          golden_zone_high: fibLow + fibRange * 0.66,
+          ote_low: fibLow + fibRange * 0.295,
+          ote_high: fibLow + fibRange * 0.705,
+        },
+        support_resistance: supportResistance,
+        order_blocks: orderBlocks.slice(-10), // Last 10
+        fvg: fvg.slice(-10), // Last 10
+        trend_lines: trendLines,
+        divergences: divergences.slice(-5), // Last 5
+        harmonic_patterns: harmonicPatterns.slice(0, 3), // First 3
+      });
+    } catch (error) {
+      console.error('Error generating analysis:', error);
+      setAnalysisData(null);
+    }
   };
 
   const drawAllOverlays = () => {
