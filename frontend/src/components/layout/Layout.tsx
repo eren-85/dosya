@@ -149,7 +149,7 @@ const Layout: React.FC<Props> = ({ children }) => {
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           minHeight: '100vh',
-          bgcolor: '#0A0E27',
+          bgcolor: 'background.default',  // Use theme background
         }}
       >
         <Toolbar /> {/* Spacer for fixed AppBar */}

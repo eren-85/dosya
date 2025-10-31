@@ -10,9 +10,9 @@ import Portfolio from './pages/Portfolio';
 import AdvancedChart from './pages/AdvancedChart';
 import Layout from './components/layout/Layout';
 
-const darkTheme = createTheme({
+const lightTheme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',  // LIGHT mode - siyah yazı
     primary: {
       main: '#00BFA6',
     },
@@ -20,8 +20,8 @@ const darkTheme = createTheme({
       main: '#FF6B6B',
     },
     background: {
-      default: '#0A0E27',
-      paper: '#151B3D',
+      default: '#f5f5f5',
+      paper: '#ffffff',
     },
   },
   typography: {
@@ -31,7 +31,7 @@ const darkTheme = createTheme({
 
 function App() {
   return (
-    <ThemeProvider theme={darkTheme}>
+    <ThemeProvider theme={lightTheme}>
       <CssBaseline />
       <Router>
         <Layout>
