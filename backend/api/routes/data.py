@@ -228,13 +228,20 @@ async def get_ohlcv(
     Priority:
     1. Read from local parquet files (data/historical/*.parquet)
     2. Fetch live data from Binance API
-    3. Generate mock data (fallback)
+    3. Generate mock data (ALWAYS WORKS as fallback)
     """
+
+    # Set a reasonable limit if 0 (all data)
+    if limit == 0:
+        limit = 2000  # Reasonable default for performance
+
+    log.info(f"Requesting {symbol} {timeframe} {market_type} (limit={limit})")
 
     # Try to read from historical files first
     candles = read_historical_data(symbol, timeframe, market_type, limit)
 
-    if candles:
+    if candles and len(candles) > 0:
+        log.info(f"✅ Returning {len(candles)} candles from historical file")
         return {
             "status": "success",
             "symbol": symbol,
@@ -246,10 +253,11 @@ async def get_ohlcv(
         }
 
     # Try to fetch live data from Binance
-    log.info(f"No historical data found, fetching live data from Binance")
-    candles = fetch_binance_live_data(symbol, timeframe, market_type, limit)
+    log.info(f"Historical file not found, trying Binance API...")
+    candles = fetch_binance_live_data(symbol, timeframe, market_type, min(limit, 1000))
 
-    if candles:
+    if candles and len(candles) > 0:
+        log.info(f"✅ Returning {len(candles)} candles from Binance API")
         return {
             "status": "success",
             "symbol": symbol,
@@ -257,13 +265,14 @@ async def get_ohlcv(
             "market_type": market_type,
             "data": candles,
             "count": len(candles),
-            "source": "binance_live"
+            "source": "binance_api"
         }
 
-    # Fallback to mock data
-    log.warning(f"No data available, generating mock data for {symbol} {timeframe}")
-    candles = generate_mock_ohlcv(symbol, timeframe, limit)
+    # Generate mock data as fallback (ALWAYS works)
+    log.warning(f"Both historical file and Binance API failed, using mock data")
+    candles = generate_mock_ohlcv(symbol, timeframe, min(limit, 500))
 
+    log.info(f"✅ Returning {len(candles)} mock candles")
     return {
         "status": "success",
         "symbol": symbol,
@@ -271,8 +280,7 @@ async def get_ohlcv(
         "market_type": market_type,
         "data": candles,
         "count": len(candles),
-        "source": "mock_data",
-        "note": "Using mock data - download real data or check Binance API connection"
+        "source": "mock_data"
     }
 
 
