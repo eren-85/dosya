@@ -73,7 +73,7 @@ async function fetchChartData(symbol: string, interval: string, marketType: stri
   try {
     const BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
     const response = await fetch(
-      `${BASE}/api/data/ohlcv?symbol=${symbol}&timeframe=${interval}&market_type=${marketType}&limit=500`
+      `${BASE}/api/data/ohlcv?symbol=${symbol}&timeframe=${interval}&market_type=${marketType}&limit=0`
     );
 
     if (!response.ok) {

@@ -141,13 +141,13 @@ const AdvancedChart: React.FC = () => {
     try {
       const BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
 
-      // Fetch OHLCV data
+      // Fetch OHLCV data (limit=0 for ALL TIME data)
       const response = await axios.get(`${BASE}/api/data/ohlcv`, {
         params: {
           symbol: selectedSymbol,
           timeframe: selectedTimeframe,
           market_type: marketType,
-          limit: 500,
+          limit: 0, // 0 = all available candles
         },
       });
 

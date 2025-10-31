@@ -58,8 +58,12 @@ def read_historical_data(
         # Read parquet file
         df = pd.read_parquet(filepath)
 
-        # Get last N candles
-        df = df.tail(limit)
+        # Get last N candles (or all if limit=0)
+        if limit > 0:
+            df = df.tail(limit)
+        # else: return all candles
+
+        log.info(f"Returning {len(df)} candles (limit={limit})")
 
         # Convert to list of dicts for API response
         candles = []
@@ -216,7 +220,7 @@ async def get_ohlcv(
     symbol: str = Query(..., description="Trading symbol (e.g., BTCUSDT)"),
     timeframe: str = Query(..., description="Timeframe (e.g., 1H, 4H, 1D)"),
     market_type: str = Query("futures", description="Market type: futures or spot"),
-    limit: int = Query(500, ge=1, le=5000, description="Number of candles")
+    limit: int = Query(0, ge=0, le=50000, description="Number of candles (0 = all available)")
 ) -> Dict[str, Any]:
     """
     Get OHLCV candlestick data for charts
