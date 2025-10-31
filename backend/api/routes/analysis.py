@@ -106,13 +106,23 @@ async def analyze(req: AnalyzeRequest):
                         on_chain_data=on_chain_data,
                     )
 
-                    results.append({
-                        "symbol": symbol,
-                        "timeframe": timeframe,
-                        "status": "success" if "error" not in analysis_result else "error",
-                        "analysis": analysis_result,
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
+                    # Check if analysis_result is an error
+                    if "error" in analysis_result and analysis_result.get("status") == "error":
+                        results.append({
+                            "symbol": symbol,
+                            "timeframe": timeframe,
+                            "status": "error",
+                            "error": analysis_result.get("message", str(analysis_result.get("error", "Unknown error"))),
+                            "timestamp": datetime.utcnow().isoformat(),
+                        })
+                    else:
+                        results.append({
+                            "symbol": symbol,
+                            "timeframe": timeframe,
+                            "status": "success",
+                            "analysis": analysis_result,
+                            "timestamp": datetime.utcnow().isoformat(),
+                        })
                 else:
                     # Return raw data without AI analysis
                     results.append({

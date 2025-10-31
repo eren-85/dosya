@@ -60,7 +60,10 @@ class OpenAIClient:
 
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY env variable.")
+            raise ValueError(
+                "OpenAI API key not found. Please add OPENAI_API_KEY to your .env file. "
+                "Example: OPENAI_API_KEY=sk-proj-..."
+            )
 
         self.model = model
         self.temperature = temperature
@@ -150,15 +153,34 @@ class OpenAIClient:
             return {
                 "status": "error",
                 "error": "rate_limit",
-                "message": "OpenAI rate limit exceeded. Please try again later.",
+                "message": (
+                    "OpenAI rate limit exceeded. This usually means:\n"
+                    "1. Your API key has exceeded free tier limits\n"
+                    "2. You need to add payment method to OpenAI account\n"
+                    "3. Or wait a few minutes and try again\n\n"
+                    f"Error details: {str(e)}"
+                ),
                 "timestamp": datetime.utcnow().isoformat()
             }
         except OpenAIError as e:
+            error_msg = str(e)
+            # Check if it's an authentication error
+            if "authentication" in error_msg.lower() or "api_key" in error_msg.lower():
+                message = (
+                    "OpenAI API authentication failed. Please check:\n"
+                    "1. Your .env file exists in the project root\n"
+                    "2. OPENAI_API_KEY is set correctly (starts with 'sk-')\n"
+                    "3. The API key is valid and not expired\n\n"
+                    f"Error details: {error_msg}"
+                )
+            else:
+                message = f"OpenAI API error: {error_msg}"
+
             logger.error(f"❌ OpenAI API error: {e}")
             return {
                 "status": "error",
                 "error": "api_error",
-                "message": str(e),
+                "message": message,
                 "timestamp": datetime.utcnow().isoformat()
             }
         except Exception as e:
@@ -166,7 +188,7 @@ class OpenAIClient:
             return {
                 "status": "error",
                 "error": "unknown",
-                "message": str(e),
+                "message": f"Unexpected error during analysis: {str(e)}",
                 "timestamp": datetime.utcnow().isoformat()
             }
 

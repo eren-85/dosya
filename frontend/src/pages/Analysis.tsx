@@ -340,12 +340,42 @@ export default function Analysis() {
                   style={{
                     background: "#ffe7e7",
                     color: "#cc0000",
-                    padding: 12,
+                    padding: 16,
                     borderRadius: 6,
                     fontSize: 14,
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
                   }}
                 >
-                  ❌ {result.error}
+                  ❌ <strong>Error:</strong>
+                  <div style={{ marginTop: 8 }}>
+                    {result.error}
+                  </div>
+                </div>
+              )}
+
+              {/* No Analysis Data Warning */}
+              {!result.error && !result.analysis && (
+                <div
+                  style={{
+                    background: "#fff3cd",
+                    color: "#856404",
+                    padding: 16,
+                    borderRadius: 6,
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  ⚠️ <strong>No analysis data available</strong>
+                  <div style={{ marginTop: 8 }}>
+                    The analysis completed but returned no data. This might indicate:
+                    <ul style={{ marginTop: 8, marginBottom: 0 }}>
+                      <li>OpenAI API key is not configured</li>
+                      <li>The model returned an unexpected response format</li>
+                      <li>Network connectivity issues</li>
+                    </ul>
+                    Please check your .env file and backend logs for more details.
+                  </div>
                 </div>
               )}
 
