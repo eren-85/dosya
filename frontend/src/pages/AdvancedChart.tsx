@@ -266,32 +266,68 @@ const AdvancedChart: React.FC = () => {
       }
     }
 
-    // Detect Fair Value Gaps (FVG) - gaps between candles
+    // Detect Fair Value Gaps (FVG) - 3-candle pattern with gap
+    // FVG occurs when middle candle's wick doesn't overlap with candle 1 and 3
     const fvg: any[] = [];
     for (let i = 2; i < candles.length; i++) {
       const candle1 = candles[i - 2];
       const candle2 = candles[i - 1];
       const candle3 = candles[i];
 
-      // Bullish FVG: gap between candle1 high and candle3 low
-      if (candle1.high < candle3.low) {
-        fvg.push({
-          start: candle1.high,
-          end: candle3.low,
-          type: 'bullish',
-          timestamp: candle3.time
-        });
+      // Bullish FVG: gap above (candle1 high < candle3 low)
+      // Strong buying pressure, price jumped up leaving a gap
+      if (candle1.high < candle3.low && candle2.low < candle3.low) {
+        const gapStart = candle1.high;
+        const gapEnd = candle3.low;
+        if ((gapEnd - gapStart) / gapStart > 0.001) { // At least 0.1% gap
+          fvg.push({
+            start: gapStart,
+            end: gapEnd,
+            type: 'bullish',
+            timestamp: candle2.time,
+            endTime: candle3.time
+          });
+        }
       }
 
-      // Bearish FVG: gap between candle1 low and candle3 high
-      if (candle1.low > candle3.high) {
-        fvg.push({
-          start: candle3.high,
-          end: candle1.low,
-          type: 'bearish',
-          timestamp: candle3.time
-        });
+      // Bearish FVG: gap below (candle1 low > candle3 high)
+      // Strong selling pressure, price dropped leaving a gap
+      if (candle1.low > candle3.high && candle2.high > candle3.high) {
+        const gapStart = candle3.high;
+        const gapEnd = candle1.low;
+        if ((gapEnd - gapStart) / gapStart > 0.001) {
+          fvg.push({
+            start: gapStart,
+            end: gapEnd,
+            type: 'bearish',
+            timestamp: candle2.time,
+            endTime: candle3.time
+          });
+        }
       }
+    }
+
+    // Detect Trend Lines (connect swing highs and lows)
+    const trendLines: any[] = [];
+    if (swingHighs.length >= 2) {
+      // Downtrend line from recent 2 swing highs
+      const sh1 = swingHighs[swingHighs.length - 2];
+      const sh2 = swingHighs[swingHighs.length - 1];
+      trendLines.push({
+        type: 'resistance',
+        point1: { time: sh1.timestamp, price: sh1.price },
+        point2: { time: sh2.timestamp, price: sh2.price }
+      });
+    }
+    if (swingLows.length >= 2) {
+      // Uptrend line from recent 2 swing lows
+      const sl1 = swingLows[swingLows.length - 2];
+      const sl2 = swingLows[swingLows.length - 1];
+      trendLines.push({
+        type: 'support',
+        point1: { time: sl1.timestamp, price: sl1.price },
+        point2: { time: sl2.timestamp, price: sl2.price }
+      });
     }
 
     setAnalysisData({
@@ -313,6 +349,7 @@ const AdvancedChart: React.FC = () => {
       support_resistance: supportResistance,
       order_blocks: orderBlocks.slice(-10), // Last 10
       fvg: fvg.slice(-10), // Last 10
+      trend_lines: trendLines,
     });
   };
 
@@ -334,6 +371,11 @@ const AdvancedChart: React.FC = () => {
       drawSupportResistance();
     }
 
+    // Draw Trend Lines
+    if (overlays.trendLines && analysisData.trend_lines) {
+      drawTrendLines();
+    }
+
     // Draw Swing Points
     if (overlays.swingPoints) {
       drawSwingPoints();
@@ -353,33 +395,86 @@ const AdvancedChart: React.FC = () => {
   const drawKillZones = () => {
     if (!chartRef.current || candleData.length === 0) return;
 
-    // Kill Zones: vertical lines at specific hours (UTC)
-    // London: 02:00-05:00, NY: 13:00-16:00, Asia: 20:00-02:00
-    const killZoneHours = [2, 3, 4, 5, 13, 14, 15, 16, 20, 21, 22, 23, 0, 1];
-
+    // Kill Zones: Mark session starts with vertical markers
+    // London: 02:00-05:00 UTC, NY: 13:00-16:00 UTC, Asia: 20:00-02:00 UTC
     const markers: any[] = [];
-    candleData.forEach(candle => {
-      const date = new Date(candle.time * 1000);
-      const hour = date.getUTCHours();
 
-      if (killZoneHours.includes(hour)) {
-        // Add subtle marker for kill zone hours
-        if (hour === 2 || hour === 13 || hour === 20) {
+    // Only mark if overlays.killZones is on AND overlays.swingPoints is off
+    // (to avoid marker conflicts)
+    if (!overlays.swingPoints) {
+      candleData.forEach((candle, idx) => {
+        const date = new Date(candle.time * 1000);
+        const hour = date.getUTCHours();
+
+        // Mark start of each session
+        if (hour === 2) { // London open
           markers.push({
             time: candle.time,
-            position: 'inBar',
-            color: 'rgba(33, 150, 243, 0.3)',
-            shape: 'circle',
-            text: hour === 2 ? 'LON' : hour === 13 ? 'NY' : 'ASIA',
-            size: 0.5
+            position: 'aboveBar',
+            color: '#2196F3',
+            shape: 'square',
+            text: '🇬🇧 LON',
+            size: 1
+          });
+        } else if (hour === 13) { // NY open
+          markers.push({
+            time: candle.time,
+            position: 'aboveBar',
+            color: '#4CAF50',
+            shape: 'square',
+            text: '🇺🇸 NY',
+            size: 1
+          });
+        } else if (hour === 20) { // Asia open
+          markers.push({
+            time: candle.time,
+            position: 'aboveBar',
+            color: '#FF9800',
+            shape: 'square',
+            text: '🌏 ASIA',
+            size: 1
           });
         }
-      }
-    });
+      });
 
-    if (markers.length > 0 && candlestickSeriesRef.current) {
-      candlestickSeriesRef.current.setMarkers(markers);
+      if (markers.length > 0 && candlestickSeriesRef.current) {
+        candlestickSeriesRef.current.setMarkers(markers);
+      }
     }
+  };
+
+  const drawTrendLines = () => {
+    if (!chartRef.current || !analysisData.trend_lines || candleData.length === 0) return;
+
+    analysisData.trend_lines.forEach((tl: any) => {
+      // Calculate slope to extend line
+      const time1 = tl.point1.time;
+      const time2 = tl.point2.time;
+      const price1 = tl.point1.price;
+      const price2 = tl.point2.price;
+
+      const slope = (price2 - price1) / (time2 - time1);
+
+      // Extend line forward
+      const lastTime = candleData[candleData.length - 1].time;
+      const extendedPrice = price2 + slope * (lastTime - time2);
+
+      const lineSeries = chartRef.current!.addLineSeries({
+        color: tl.type === 'support' ? '#00BFA6' : '#FF6B6B',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+
+      lineSeries.setData([
+        { time: time1 as Time, value: price1 },
+        { time: time2 as Time, value: price2 },
+        { time: lastTime as Time, value: extendedPrice },
+      ]);
+
+      overlaySeriesRef.current.push(lineSeries);
+    });
   };
 
   const drawFibonacci = () => {
@@ -390,15 +485,17 @@ const AdvancedChart: React.FC = () => {
     const lastTime = candleData[candleData.length - 1].time;
 
     const levels = [
-      { price: fib.level_236, label: '23.6%', color: '#9E9E9E', width: 1 },
-      { price: fib.level_382, label: '38.2%', color: '#FFA726', width: 1 },
-      { price: fib.level_500, label: '50.0%', color: '#2196F3', width: 2 },
-      { price: fib.level_618, label: '61.8%', color: '#FFA726', width: 1 },
-      { price: fib.level_786, label: '78.6%', color: '#9E9E9E', width: 1 },
-      { price: fib.golden_zone_low, label: 'GZ Low', color: '#FFD700', width: 2 },
-      { price: fib.golden_zone_high, label: 'GZ High', color: '#FFD700', width: 2 },
-      { price: fib.ote_low, label: 'OTE Low', color: '#00E676', width: 2 },
-      { price: fib.ote_high, label: 'OTE High', color: '#00E676', width: 2 },
+      { price: fib.swing_high, label: '1.0 (100%)', color: '#E91E63', width: 3 }, // 0 line (swing high)
+      { price: fib.level_786, label: '0.786 (78.6%)', color: '#9C27B0', width: 1 },
+      { price: fib.ote_high, label: '0.705 OTE High', color: '#4CAF50', width: 2 },
+      { price: fib.golden_zone_high, label: '0.66 GZ High', color: '#FFC107', width: 2 },
+      { price: fib.level_618, label: '0.618 (61.8%)', color: '#FF9800', width: 2 },
+      { price: fib.golden_zone_low, label: '0.618 GZ Low', color: '#FFC107', width: 2 },
+      { price: fib.level_500, label: '0.5 (50%)', color: '#2196F3', width: 3 }, // Equilibrium
+      { price: fib.level_382, label: '0.382 (38.2%)', color: '#FF9800', width: 2 },
+      { price: fib.ote_low, label: '0.295 OTE Low', color: '#4CAF50', width: 2 },
+      { price: fib.level_236, label: '0.236 (23.6%)', color: '#9C27B0', width: 1 },
+      { price: fib.swing_low, label: '0.0 (0%)', color: '#E91E63', width: 3 }, // 1 line (swing low)
     ];
 
     levels.forEach((level) => {
@@ -406,9 +503,10 @@ const AdvancedChart: React.FC = () => {
         const lineSeries = chartRef.current!.addLineSeries({
           color: level.color,
           lineWidth: level.width,
-          lineStyle: level.width === 2 ? LineStyle.Solid : LineStyle.Dotted,
-          priceLineVisible: false,
-          lastValueVisible: false,
+          lineStyle: level.width === 3 ? LineStyle.Solid : level.width === 2 ? LineStyle.Solid : LineStyle.Dashed,
+          priceLineVisible: true,
+          lastValueVisible: true,
+          title: level.label, // Show label on price scale
         });
 
         lineSeries.setData([

@@ -22,61 +22,160 @@ const Dashboard: React.FC = () => {
   // WebSocket disabled for now - use REST API endpoints instead
   const { alerts, isConnected } = useWebSocket(); // No URL = disabled
 
-  // Symbol, timeframe, and market type selection
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeframe, setTimeframe] = useState('1H');
   const [marketType, setMarketType] = useState('futures'); // 'futures' or 'spot'
 
-  // Market data (TODO: fetch from backend API)
-  const [marketData, setMarketData] = useState({
+  // Market data - fetch from backend
+  const [marketData, setMarketData] = useState<any>({
     symbol: 'BTCUSDT',
-    btc_price: 67234,
-    change_24h: 2.34,
-    sentiment: 'bullish',
-    confidence: 0.72,
-    volatility_regime: 'Normal',
-    funding_rate: 0.0082,
-    key_observation: 'Price consolidating above $67k support. Bullish momentum building.'
+    btc_price: 0,
+    change_24h: 0,
+    sentiment: 'neutral',
+    confidence: 0.5,
+    volatility_regime: 'Loading...',
+    funding_rate: 0,
+    key_observation: 'Loading market data...'
   });
 
-  // Flow data (TODO: fetch from backend API)
-  const [flowData, setFlowData] = useState({
-    exchange_netflow: -3250000, // Negative = outflow (bullish)
-    miner_reserve_change: 1200, // Positive = accumulation
-    whale_transactions: 47,
-    stablecoin_supply_ratio: 0.08,
-    liquidations_24h: {
-      longs: 12500000,
-      shorts: 18700000
-    }
+  // Flow data - fetch from backend
+  const [flowData, setFlowData] = useState<any>({
+    exchange_netflow: 0,
+    miner_reserve_change: 0,
+    whale_transactions: 0,
+    stablecoin_supply_ratio: 0,
+    liquidations_24h: { longs: 0, shorts: 0 }
   });
 
-  const [scenarios, setScenarios] = useState([
-    {
-      name: 'Bull',
-      type: 'bull',
-      prob: 0.45,
-      trigger: 'Break above $68,000',
-      targets: [70000, 72000],
-      invalidation: 'Drop below $65,500'
-    },
-    {
-      name: 'Base',
-      type: 'base',
-      prob: 0.35,
-      trigger: 'Range continuation',
-      targets: [67500],
-      invalidation: 'Break of range'
-    },
-    {
-      name: 'Bear',
-      type: 'bear',
-      prob: 0.20,
-      trigger: 'Break below $65,000',
-      targets: [63000, 60000],
-      invalidation: 'Recovery above $66,500'
+  const [scenarios, setScenarios] = useState<any[]>([]);
+
+  // Fetch live market data
+  useEffect(() => {
+    fetchMarketData();
+    const interval = setInterval(fetchMarketData, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [symbol, marketType]);
+
+  const fetchMarketData = async () => {
+    try {
+      const BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
+
+      // Fetch current price from Binance
+      const binanceUrl = marketType === 'futures'
+        ? 'https://fapi.binance.com/fapi/v1/ticker/24hr'
+        : 'https://api.binance.com/api/v3/ticker/24hr';
+
+      const response = await fetch(`${binanceUrl}?symbol=${symbol}`);
+      const data = await response.json();
+
+      const currentPrice = parseFloat(data.lastPrice);
+      const change24h = parseFloat(data.priceChangePercent);
+      const volume = parseFloat(data.volume);
+
+      // Simple sentiment based on price change
+      const sentiment = change24h > 2 ? 'bullish' : change24h < -2 ? 'bearish' : 'neutral';
+      const confidence = Math.min(Math.abs(change24h) / 5, 1);
+
+      // Get funding rate for futures
+      let fundingRate = 0;
+      if (marketType === 'futures') {
+        try {
+          const fundingResp = await fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${symbol}&limit=1`);
+          const fundingData = await fundingResp.json();
+          if (fundingData.length > 0) {
+            fundingRate = parseFloat(fundingData[0].fundingRate);
+          }
+        } catch (e) {
+          console.error('Failed to fetch funding rate:', e);
+        }
+      }
+
+      setMarketData({
+        symbol,
+        btc_price: currentPrice,
+        change_24h: change24h,
+        sentiment,
+        confidence,
+        volatility_regime: Math.abs(change24h) > 5 ? 'High' : Math.abs(change24h) > 2 ? 'Normal' : 'Low',
+        funding_rate: fundingRate,
+        key_observation: `${symbol} ${change24h > 0 ? 'up' : 'down'} ${Math.abs(change24h).toFixed(2)}% in 24h. ${sentiment.charAt(0).toUpperCase() + sentiment.slice(1)} momentum.`
+      });
+
+      // Generate dynamic scenarios based on current price
+      generateScenarios(currentPrice, change24h);
+
+      // Mock flow data (TODO: fetch real on-chain data)
+      setFlowData({
+        exchange_netflow: change24h < 0 ? -3250000 : -1500000,
+        miner_reserve_change: change24h > 0 ? 1200 : -800,
+        whale_transactions: Math.floor(30 + Math.random() * 30),
+        stablecoin_supply_ratio: 0.08,
+        liquidations_24h: {
+          longs: change24h < 0 ? 25000000 : 12500000,
+          shorts: change24h > 0 ? 30000000 : 18700000
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to fetch market data:', error);
     }
-  ]);
+  };
+
+  const generateScenarios = (currentPrice: number, change24h: number) => {
+    // Calculate dynamic price targets based on current price
+    const resistance1 = currentPrice * 1.03; // +3%
+    const resistance2 = currentPrice * 1.06; // +6%
+    const support1 = currentPrice * 0.97; // -3%
+    const support2 = currentPrice * 0.94; // -6%
+
+    // Probabilities based on recent momentum
+    let bullProb = 0.35;
+    let baseProb = 0.35;
+    let bearProb = 0.30;
+
+    if (change24h > 3) {
+      bullProb = 0.50;
+      baseProb = 0.30;
+      bearProb = 0.20;
+    } else if (change24h < -3) {
+      bullProb = 0.20;
+      baseProb = 0.30;
+      bearProb = 0.50;
+    }
+
+    setScenarios([
+      {
+        name: 'Bull',
+        type: 'bull',
+        prob: bullProb,
+        trigger: `Break above $${(currentPrice * 1.02).toLocaleString('en-US', {maximumFractionDigits: 0})}`,
+        targets: [
+          Math.round(resistance1),
+          Math.round(resistance2)
+        ],
+        invalidation: `Drop below $${support1.toLocaleString('en-US', {maximumFractionDigits: 0})}`
+      },
+      {
+        name: 'Base',
+        type: 'base',
+        prob: baseProb,
+        trigger: 'Range continuation',
+        targets: [Math.round(currentPrice)],
+        invalidation: 'Break of range'
+      },
+      {
+        name: 'Bear',
+        type: 'bear',
+        prob: bearProb,
+        trigger: `Break below $${support1.toLocaleString('en-US', {maximumFractionDigits: 0})}`,
+        targets: [
+          Math.round(support1),
+          Math.round(support2)
+        ],
+        invalidation: `Recovery above $${(currentPrice * 1.01).toLocaleString('en-US', {maximumFractionDigits: 0})}`
+      }
+    ]);
+  };
 
   return (
     <Box sx={{ p: 3 }}>
