@@ -217,7 +217,7 @@ def sync_historical(
     interval: str,
     market: str,
     base_dir: str = "data/historical",
-    parquet: bool = False,
+    parquet: bool = True,  # Changed default to True (use Parquet by default)
     all_time: bool = False,
     start: Optional[str] = None,
     end: Optional[str] = None,
@@ -228,7 +228,7 @@ def sync_historical(
     Her sembol için:
       - varsa yerel CSV/Parquet'ten son close_time alınır
       - yoksa ALL-TIME indirilir
-      - CSV append + opsiyonel Parquet append
+      - Parquet'e append edilir (CSV deprecated, sadece backward compatibility için)
     Dönüş: [(symbol, first_ms, last_ms, added_rows), ...]
     """
     symbols = [s.strip() for s in symbols if s.strip()]
@@ -303,9 +303,11 @@ def sync_historical(
             time.sleep(0.05)
 
         if added > 0:
-            print(f"💾 CSV updated: {os.path.abspath(csv_path)} (+{added} rows)")
+            # Note: CSV is kept for backward compatibility only
+            print(f"💾 Saved CSV: {os.path.abspath(csv_path)}")
             if parquet:
-                print(f"💾 Parquet updated: {os.path.abspath(parquet_path)}")
+                print(f"💾 Saved Parquet: {os.path.abspath(parquet_path)}")
+                print(f"   ⚠️  CSV format is deprecated. Use Parquet for better performance.")
         else:
             print(f"✅ {sym}: up to date. Nothing to append.")
 

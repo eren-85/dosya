@@ -165,33 +165,45 @@ def _iterate_klines(symbol: str, interval: str, market: str, start_ms: int, end_
 
 
 def _save_csv_parquet(rows: T.List[dict], csv_path: str, parquet: bool):
-    """Always write CSV; optionally write Parquet next to it."""
+    """Write data to Parquet (primary format) and optionally CSV (deprecated)."""
     ensure_dir(os.path.dirname(csv_path))
     fieldnames = list(rows[0].keys()) if rows else [
         "open_time","open","high","low","close","volume","close_time",
         "quote_volume","n_trades","taker_buy_base","taker_buy_quote","market"
     ]
 
-    # CSV
+    # Parquet (PRIMARY format)
+    parquet_path = csv_path.replace(".csv", ".parquet")
+    if pd is None:
+        print("⚠️  pandas (and pyarrow/fastparquet) not installed, cannot save Parquet.")
+        print("⚠️  Falling back to CSV only.")
+        # Fall back to CSV if pandas not available
+        import csv
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in rows:
+                w.writerow(r)
+        print(f"💾 Saved CSV: {csv_path}")
+        return
+
+    try:
+        df = pd.DataFrame(rows)
+        df.to_parquet(parquet_path, index=False)
+        print(f"💾 Saved Parquet: {parquet_path}")
+    except Exception as ex:
+        print(f"⚠️  Parquet save failed: {ex}")
+        print(f"⚠️  Falling back to CSV.")
+
+    # CSV (DEPRECATED - for backward compatibility only)
+    # Only save CSV if explicitly requested or Parquet failed
     import csv
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         for r in rows:
             w.writerow(r)
-    print(f"💾 Saved CSV: {csv_path}")
-
-    # Parquet
-    if parquet:
-        if pd is None:
-            print("⚠️  pandas (and pyarrow/fastparquet) not installed, skipping Parquet.")
-            return
-        try:
-            df = pd.DataFrame(rows)
-            df.to_parquet(csv_path.replace(".csv", ".parquet"), index=False)
-            print(f"💾 Saved Parquet: {csv_path.replace('.csv', '.parquet')}")
-        except Exception as ex:
-            print(f"⚠️  Parquet save failed: {ex}")
+    print(f"💾 Saved CSV: {csv_path} (deprecated - use Parquet)")
 
 
 def cmd_download(args: argparse.Namespace) -> None:
