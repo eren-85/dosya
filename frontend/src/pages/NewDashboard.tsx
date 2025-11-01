@@ -65,6 +65,7 @@ interface MarketIndices {
 
 export default function NewDashboard() {
   const [selectedCoins, setSelectedCoins] = useState<string[]>(['BTCUSDT', 'ETHUSDT', 'BNBUSDT']);
+  const [customSymbols, setCustomSymbols] = useState('');
   const [coinsData, setCoinsData] = useState<CoinData[]>([]);
   const [marketIndices, setMarketIndices] = useState<MarketIndices | null>(null);
   const [analysis, setAnalysis] = useState<ExtendedAnalysis>({});
@@ -172,6 +173,17 @@ export default function NewDashboard() {
     );
   };
 
+  const handleCustomSymbolsApply = () => {
+    const symbols = customSymbols
+      .split(',')
+      .map(s => s.trim().toUpperCase())
+      .filter(s => s && s.endsWith('USDT'));
+
+    if (symbols.length > 0) {
+      setSelectedCoins(symbols);
+    }
+  };
+
   if (loading) {
     return <DashboardSkeleton />;
   }
@@ -205,21 +217,48 @@ export default function NewDashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Select Coins to Track</CardTitle>
-          <CardDescription>Choose which coins to display on your dashboard</CardDescription>
+          <CardDescription>Choose from quick select or enter custom symbols</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {COMMON_SYMBOLS.map((symbol) => (
-              <Badge
-                key={symbol}
-                variant={selectedCoins.includes(symbol) ? 'default' : 'outline'}
-                className="cursor-pointer px-3 py-1.5 text-sm"
-                onClick={() => handleCoinToggle(symbol)}
-              >
-                {symbol.replace('USDT', '')}
-                {selectedCoins.includes(symbol) && ' ✓'}
-              </Badge>
-            ))}
+        <CardContent className="space-y-4">
+          {/* Quick Select */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Quick Select</label>
+            <div className="flex flex-wrap gap-2">
+              {COMMON_SYMBOLS.map((symbol) => (
+                <Badge
+                  key={symbol}
+                  variant={selectedCoins.includes(symbol) ? 'default' : 'outline'}
+                  className="cursor-pointer px-3 py-1.5 text-sm"
+                  onClick={() => handleCoinToggle(symbol)}
+                >
+                  {symbol.replace('USDT', '')}
+                  {selectedCoins.includes(symbol) && ' ✓'}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Symbols */}
+          <div>
+            <label htmlFor="custom-symbols" className="text-sm font-medium mb-2 block">
+              Custom Symbols
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="custom-symbols"
+                type="text"
+                value={customSymbols}
+                onChange={(e) => setCustomSymbols(e.target.value)}
+                placeholder="BTCUSDT,ETHUSDT,SOLUSDT"
+                className="flex-1 px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <Button onClick={handleCustomSymbolsApply} variant="outline">
+                Apply
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Comma-separated symbols (e.g., BTCUSDT,ETHUSDT). Automatically appends USDT if needed.
+            </p>
           </div>
         </CardContent>
       </Card>
