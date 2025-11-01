@@ -9,10 +9,11 @@
  */
 
 import { useState } from 'react';
-import { Brain, Cpu, Play, Square, Zap, TrendingUp } from 'lucide-react';
+import { Brain, Cpu, Play, Square, Zap, TrendingUp, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
 import { TIMEFRAMES, COMMON_SYMBOLS, MarketType } from '@/lib/constants';
 import { api } from '@/lib/api';
@@ -302,6 +303,18 @@ export default function NewTraining() {
         </Card>
       )}
 
+      {/* GPU Info Alert */}
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          <strong>GPU Badge Colors:</strong>{' '}
+          <Badge variant="warning" className="text-xs mx-1">GPU Recommended</Badge>{' '}
+          means the model works on CPU but GPU is 10-50x faster.{' '}
+          <Badge variant="destructive" className="text-xs mx-1">GPU Required</Badge>{' '}
+          means CPU training will be extremely slow or fail - CUDA is strongly recommended.
+        </AlertDescription>
+      </Alert>
+
       {/* Model Info Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <ModelInfoCard
@@ -381,9 +394,16 @@ function ModelInfoCard({
           <span className="text-sm font-bold text-primary">{accuracy}</span>
         </div>
         {(gpuRecommended || gpuRequired) && (
-          <Badge variant={gpuRequired ? 'destructive' : 'warning'} className="text-xs">
-            {gpuRequired ? 'GPU Required' : 'GPU Recommended'}
-          </Badge>
+          <div className="space-y-1">
+            <Badge variant={gpuRequired ? 'destructive' : 'warning'} className="text-xs">
+              {gpuRequired ? 'GPU Required' : 'GPU Recommended'}
+            </Badge>
+            <p className="text-xs text-muted-foreground mt-1">
+              {gpuRequired
+                ? 'Cannot train without GPU (CUDA). CPU training will be extremely slow or fail.'
+                : 'Works on CPU but GPU will be 10-50x faster. Consider using CUDA if available.'}
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>
