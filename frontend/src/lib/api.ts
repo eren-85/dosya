@@ -178,14 +178,24 @@ export const api = {
   // Download data
   async downloadData(params: {
     symbols: string[];
-    exchange: string;
-    intervals: string[];
+    interval: string;
+    market: 'spot' | 'futures';
     all_time: boolean;
+    start_date?: string;
+    end_date?: string;
   }): Promise<any> {
     const response = await fetchWithRetry(`${API_BASE_URL}/api/ops/download`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        symbols: params.symbols,
+        interval: params.interval,
+        market: params.market,
+        all_time: params.all_time,
+        start_date: params.start_date,
+        end_date: params.end_date,
+        parquet: true,
+      }),
     });
     return response.json();
   },

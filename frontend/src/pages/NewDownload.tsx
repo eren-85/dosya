@@ -14,12 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
-import { TIMEFRAMES, EXCHANGES, MarketType, COMMON_SYMBOLS } from '@/lib/constants';
+import { TIMEFRAMES, MarketType, COMMON_SYMBOLS } from '@/lib/constants';
 import { api } from '@/lib/api';
 
 export default function NewDownload() {
   const [symbols, setSymbols] = useState('BTCUSDT,ETHUSDT');
-  const [exchange, setExchange] = useState<string>('binance');
   const [intervals, setIntervals] = useState('1h,4h,1d');
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [allTime, setAllTime] = useState(false);
@@ -43,42 +42,71 @@ export default function NewDownload() {
       return;
     }
 
+    if (intervalList.length === 0) {
+      appendLog('❌ Error: No intervals provided');
+      setStatus('error');
+      setLoading(false);
+      return;
+    }
+
     appendLog(`📊 Market Type: ${marketType.toUpperCase()}\n`);
-    appendLog(`🏦 Exchange: ${exchange}\n`);
+    appendLog(`🏦 Exchange: Binance\n`);
     appendLog(`💱 Symbols: ${symbolList.join(', ')}\n`);
     appendLog(`⏱️  Intervals: ${intervalList.join(', ')}\n`);
     appendLog(`📅 All-time: ${allTime ? 'Yes' : 'No'}\n\n`);
 
+    let allSuccess = true;
+    let totalDownloads = 0;
+    let failedDownloads = 0;
+
     try {
-      const result = await api.downloadData({
-        symbols: symbolList,
-        exchange,
-        intervals: intervalList,
-        all_time: allTime,
-      });
+      // Download data for each interval separately (backend expects single interval)
+      for (const interval of intervalList) {
+        appendLog(`\n📥 Downloading ${interval} data...\n`);
 
-      if (result.ok) {
-        appendLog('✅ Download completed successfully!');
-        appendLog(`\n${result.stdout || ''}`);
-        setStatus('success');
-      } else {
-        appendLog(`❌ Download failed (code: ${result.returncode})`);
-        appendLog(`\n${result.stderr || ''}`);
-        setStatus('error');
-      }
-    } catch (error: any) {
-      appendLog(`❌ Error: ${error.message}`);
+        try {
+          const result = await api.downloadData({
+            symbols: symbolList,
+            interval: interval,
+            market: marketType,
+            all_time: allTime,
+          });
 
-      // Simulate success for demo
-      appendLog('\n📥 Downloading data from Binance...');
-      for (const symbol of symbolList) {
-        for (const interval of intervalList) {
+          if (result.ok) {
+            appendLog(`✅ ${interval} download completed successfully!\n`);
+            if (result.stdout) {
+              appendLog(`${result.stdout}\n`);
+            }
+            totalDownloads++;
+          } else {
+            appendLog(`❌ ${interval} download failed (code: ${result.returncode})\n`);
+            if (result.stderr) {
+              appendLog(`${result.stderr}\n`);
+            }
+            allSuccess = false;
+            failedDownloads++;
+          }
+        } catch (intervalError: any) {
+          appendLog(`❌ ${interval} error: ${intervalError.message}\n`);
+          allSuccess = false;
+          failedDownloads++;
+        }
+
+        // Small delay between requests
+        if (intervalList.indexOf(interval) < intervalList.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
-          appendLog(`  ✓ ${symbol} ${interval} - Downloaded 1000 candles`);
         }
       }
-      appendLog('\n✅ All downloads completed!');
-      setStatus('success');
+
+      appendLog(`\n${'='.repeat(50)}\n`);
+      appendLog(`✅ Completed: ${totalDownloads}/${intervalList.length} intervals\n`);
+      if (failedDownloads > 0) {
+        appendLog(`❌ Failed: ${failedDownloads} intervals\n`);
+      }
+      setStatus(allSuccess ? 'success' : 'error');
+    } catch (error: any) {
+      appendLog(`\n❌ Critical error: ${error.message}\n`);
+      setStatus('error');
     } finally {
       setLoading(false);
     }
@@ -164,45 +192,23 @@ export default function NewDownload() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Exchange */}
-            <div>
-              <label htmlFor="exchange" className="text-sm font-medium mb-2 block">
-                Exchange
-              </label>
-              <select
-                id="exchange"
-                value={exchange}
-                onChange={(e) => setExchange(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                disabled={loading}
-              >
-                {EXCHANGES.map((ex) => (
-                  <option key={ex.value} value={ex.value}>
-                    {ex.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Intervals */}
-            <div>
-              <label htmlFor="intervals" className="text-sm font-medium mb-2 block">
-                Timeframes
-              </label>
-              <input
-                id="intervals"
-                type="text"
-                value={intervals}
-                onChange={(e) => setIntervals(e.target.value)}
-                placeholder="1h,4h,1d"
-                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Available: {TIMEFRAMES.map(t => t.value).join(', ')}
-              </p>
-            </div>
+          {/* Intervals */}
+          <div>
+            <label htmlFor="intervals" className="text-sm font-medium mb-2 block">
+              Timeframes
+            </label>
+            <input
+              id="intervals"
+              type="text"
+              value={intervals}
+              onChange={(e) => setIntervals(e.target.value)}
+              placeholder="1h,4h,1d"
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Available: {TIMEFRAMES.map(t => t.value).join(', ')}
+            </p>
           </div>
 
           {/* All-time Option */}
