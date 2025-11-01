@@ -202,15 +202,28 @@ export const api = {
 
   // Backtest
   async runBacktest(params: {
-    symbol: string;
+    symbols: string[];
     timeframe: string;
-    initial_capital: number;
     strategy: string;
+    start_date: string;
+    end_date: string;
+    initial_capital: number;
+    position_size_pct?: number;
+    commission_pct?: number;
   }): Promise<any> {
-    const response = await fetchWithRetry(`${API_BASE_URL}/api/backtest/run`, {
+    const response = await fetchWithRetry(`${API_BASE_URL}/api/ops/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        symbols: params.symbols,
+        timeframe: params.timeframe,
+        strategy: params.strategy,
+        start_date: params.start_date,
+        end_date: params.end_date,
+        initial_capital: params.initial_capital,
+        position_size_pct: params.position_size_pct || 10.0,
+        commission_pct: params.commission_pct || 0.1,
+      }),
     });
     return response.json();
   },
