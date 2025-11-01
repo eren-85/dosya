@@ -92,15 +92,22 @@ export default function NewAdvancedChart() {
     };
   }, []);
 
+  // Reload data when symbol, interval, or marketType changes
+  useEffect(() => {
+    loadChartData();
+  }, [symbol, interval, marketType]);
+
   const loadChartData = async () => {
     if (!seriesRef.current) return;
 
     setLoading(true);
     try {
-      // Try to fetch from Binance API
+      // Fetch maximum allowed candles from Binance API
+      // Spot: 1000 max, Futures: 1500 max
+      const maxLimit = marketType === 'spot' ? 1000 : 1500;
       const endpoint = marketType === 'spot'
-        ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=500`
-        : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=500`;
+        ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`
+        : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`;
 
       const response = await fetch(endpoint);
       const data = await response.json();
