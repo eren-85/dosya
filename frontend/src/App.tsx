@@ -7,6 +7,7 @@ import NewAnalysis from './pages/NewAnalysis';
 import NewBacktest from './pages/NewBacktest';
 import NewAdvancedChart from './pages/NewAdvancedChart';
 import NewPortfolio from './pages/NewPortfolio';
+import NewPDFLearning from './pages/NewPDFLearning';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/backtest" element={<NewBacktest />} />
           <Route path="/advanced-chart" element={<NewAdvancedChart />} />
           <Route path="/portfolio" element={<NewPortfolio />} />
+          <Route path="/pdf-learning" element={<NewPDFLearning />} />
         </Routes>
       </NewLayout>
     </Router>

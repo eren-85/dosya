@@ -15,6 +15,7 @@ import {
   LineChart,
   TrendingUp,
   Briefcase,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -45,6 +46,7 @@ const menuItems: MenuItem[] = [
   { path: '/backtest', label: 'Backtest', icon: <TrendingUp className="w-5 h-5" /> },
   { path: '/advanced-chart', label: 'Advanced Chart', icon: <LineChart className="w-5 h-5" /> },
   { path: '/portfolio', label: 'Portfolio', icon: <Briefcase className="w-5 h-5" /> },
+  { path: '/pdf-learning', label: 'PDF Learning', icon: <BookOpen className="w-5 h-5" /> },
 ];
 
 export default function NewLayout({ children }: LayoutProps) {
