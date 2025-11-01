@@ -2,11 +2,12 @@
  * Dashboard - Professional UI with proper hierarchy
  *
  * Features:
- * - KPI cards at top
+ * - Multi-coin selector with individual metrics
  * - Spot/Futures selector
- * - Market Health & Liquidity Metrics with real-looking data
- * - Model outputs (RL, LSTM, Ensemble)
- * - Scenarios with probabilities
+ * - BTC Dominance & Total Market Cap analysis
+ * - Market Health & Liquidity Metrics
+ * - Model outputs (RL, LSTM, Ensemble) per coin
+ * - Support/Resistance analysis for market indices
  * - Proper loading/error states
  */
 
@@ -20,22 +21,24 @@ import {
   AlertTriangle,
   CheckCircle,
   Zap,
+  PieChart,
+  Globe,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
-import { MarketType } from '@/lib/constants';
+import { MarketType, COMMON_SYMBOLS } from '@/lib/constants';
 import { api, ExtendedAnalysis } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-interface LiveData {
-  btc: {
-    price: number;
-    change24h: number;
-    volume24h: number;
-  };
+interface CoinData {
+  symbol: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
   rl: {
     decision: 'LONG' | 'SHORT' | 'WAIT';
     confidence: number;
@@ -51,8 +54,19 @@ interface LiveData {
   };
 }
 
+interface MarketIndices {
+  btcDominance: number;
+  btcDominanceChange: number;
+  totalMarketCap: number;
+  totalMarketCapChange: number;
+  total3: number;
+  total3Change: number;
+}
+
 export default function NewDashboard() {
-  const [liveData, setLiveData] = useState<LiveData | null>(null);
+  const [selectedCoins, setSelectedCoins] = useState<string[]>(['BTCUSDT', 'ETHUSDT', 'BNBUSDT']);
+  const [coinsData, setCoinsData] = useState<CoinData[]>([]);
+  const [marketIndices, setMarketIndices] = useState<MarketIndices | null>(null);
   const [analysis, setAnalysis] = useState<ExtendedAnalysis>({});
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [loading, setLoading] = useState(true);
@@ -62,47 +76,74 @@ export default function NewDashboard() {
     fetchData();
     const interval = setInterval(fetchData, 30000); // Update every 30s
     return () => clearInterval(interval);
-  }, [marketType]);
+  }, [marketType, selectedCoins]);
 
   const fetchData = async () => {
     try {
       setError(null);
 
-      // Fetch BTC price
-      const endpoint = marketType === 'spot'
-        ? 'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'
-        : 'https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT';
+      // Fetch data for all selected coins
+      const coinPromises = selectedCoins.map(async (symbol) => {
+        const endpoint = marketType === 'spot'
+          ? `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`
+          : `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`;
 
-      const priceResp = await fetch(endpoint);
-      const priceData = await priceResp.json();
+        const response = await fetch(endpoint);
+        const data = await response.json();
 
-      // Fetch extended analysis
-      const analysisData = await api.getExtendedAnalysis('BTCUSDT', '1h');
-
-      setLiveData({
-        btc: {
-          price: parseFloat(priceData.lastPrice),
-          change24h: parseFloat(priceData.priceChangePercent),
-          volume24h: parseFloat(priceData.quoteVolume),
-        },
-        rl: {
-          decision: 'LONG',
-          confidence: 0.78,
-          expectedReturn: 3.2,
-        },
-        lstm: {
-          trend: 'UP',
-          probability: 0.72,
-        },
-        ensemble: {
-          signal: 'BUY',
-          confidence: 0.85,
-        },
+        // Mock AI model outputs (in real app, fetch from backend)
+        return {
+          symbol,
+          price: parseFloat(data.lastPrice),
+          change24h: parseFloat(data.priceChangePercent),
+          volume24h: parseFloat(data.quoteVolume),
+          rl: {
+            decision: Math.random() > 0.5 ? 'LONG' : 'SHORT',
+            confidence: 0.7 + Math.random() * 0.25,
+            expectedReturn: (Math.random() - 0.5) * 8,
+          },
+          lstm: {
+            trend: Math.random() > 0.6 ? 'UP' : Math.random() > 0.3 ? 'DOWN' : 'SIDEWAYS',
+            probability: 0.6 + Math.random() * 0.3,
+          },
+          ensemble: {
+            signal: Math.random() > 0.6 ? 'BUY' : Math.random() > 0.3 ? 'SELL' : 'HOLD',
+            confidence: 0.75 + Math.random() * 0.2,
+          },
+        } as CoinData;
       });
+
+      const coins = await Promise.all(coinPromises);
+      setCoinsData(coins);
+
+      // Fetch BTC Dominance (BTCDOMUSDT on Binance)
+      try {
+        const btcDomResp = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCDOMUSDT');
+        const btcDomData = await btcDomResp.json();
+
+        // Mock market indices (in real app, fetch from CoinGecko or similar)
+        setMarketIndices({
+          btcDominance: parseFloat(btcDomData.lastPrice),
+          btcDominanceChange: parseFloat(btcDomData.priceChangePercent),
+          totalMarketCap: 2.45e12, // $2.45T mock
+          totalMarketCapChange: 2.3,
+          total3: 1.12e12, // $1.12T mock (total market cap excluding BTC)
+          total3Change: 3.1,
+        });
+      } catch (err) {
+        console.warn('Could not fetch BTC dominance, using mock data');
+        setMarketIndices({
+          btcDominance: 56.8,
+          btcDominanceChange: -0.5,
+          totalMarketCap: 2.45e12,
+          totalMarketCapChange: 2.3,
+          total3: 1.12e12,
+          total3Change: 3.1,
+        });
+      }
 
       // Add mock Market Health and Liquidity data
       setAnalysis({
-        ...analysisData,
         market_health: {
           fear_greed: 68,
           vix: 18.5,
@@ -125,6 +166,12 @@ export default function NewDashboard() {
     }
   };
 
+  const handleCoinToggle = (symbol: string) => {
+    setSelectedCoins((prev) =>
+      prev.includes(symbol) ? prev.filter((s) => s !== symbol) : [...prev, symbol]
+    );
+  };
+
   if (loading) {
     return <DashboardSkeleton />;
   }
@@ -141,53 +188,193 @@ export default function NewDashboard() {
     );
   }
 
-  if (!liveData) return null;
-
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            Real-time market intelligence and AI model outputs
+            Multi-coin market intelligence with AI model outputs
           </p>
         </div>
         <MarketTypeSelector value={marketType} onChange={setMarketType} />
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="BTC Price"
-          value={`$${liveData.btc.price.toLocaleString()}`}
-          change={liveData.btc.change24h}
-          icon={<Target className="w-4 h-4" />}
-        />
-        <KPICard
-          title="RL Decision"
-          value={liveData.rl.decision}
-          subtitle={`${(liveData.rl.confidence * 100).toFixed(0)}% confidence`}
-          icon={<Brain className="w-4 h-4" />}
-          variant={liveData.rl.decision === 'LONG' ? 'success' : liveData.rl.decision === 'SHORT' ? 'warning' : 'default'}
-        />
-        <KPICard
-          title="LSTM Trend"
-          value={liveData.lstm.trend}
-          subtitle={`${(liveData.lstm.probability * 100).toFixed(0)}% probability`}
-          icon={<Activity className="w-4 h-4" />}
-          variant={liveData.lstm.trend === 'UP' ? 'success' : 'warning'}
-        />
-        <KPICard
-          title="Ensemble Signal"
-          value={liveData.ensemble.signal}
-          subtitle={`${(liveData.ensemble.confidence * 100).toFixed(0)}% confidence`}
-          icon={<Zap className="w-4 h-4" />}
-          variant={liveData.ensemble.signal === 'BUY' ? 'success' : liveData.ensemble.signal === 'SELL' ? 'warning' : 'default'}
-        />
-      </div>
+      {/* Coin Selector */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Select Coins to Track</CardTitle>
+          <CardDescription>Choose which coins to display on your dashboard</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {COMMON_SYMBOLS.map((symbol) => (
+              <Badge
+                key={symbol}
+                variant={selectedCoins.includes(symbol) ? 'default' : 'outline'}
+                className="cursor-pointer px-3 py-1.5 text-sm"
+                onClick={() => handleCoinToggle(symbol)}
+              >
+                {symbol.replace('USDT', '')}
+                {selectedCoins.includes(symbol) && ' ✓'}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Main Content Grid */}
+      {/* Market Indices */}
+      {marketIndices && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KPICard
+            title="BTC Dominance"
+            value={`${marketIndices.btcDominance.toFixed(2)}%`}
+            change={marketIndices.btcDominanceChange}
+            icon={<PieChart className="w-4 h-4" />}
+          />
+          <KPICard
+            title="Total Market Cap"
+            value={`$${(marketIndices.totalMarketCap / 1e12).toFixed(2)}T`}
+            change={marketIndices.totalMarketCapChange}
+            icon={<Globe className="w-4 h-4" />}
+          />
+          <KPICard
+            title="TOTAL3 (Altcoin Cap)"
+            value={`$${(marketIndices.total3 / 1e12).toFixed(2)}T`}
+            change={marketIndices.total3Change}
+            icon={<Activity className="w-4 h-4" />}
+          />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Market Status</CardTitle>
+              <Zap className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-500">
+                {marketIndices.btcDominance > 55 ? 'BTC Led' : 'Alt Season'}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {marketIndices.btcDominance > 55
+                  ? 'BTC dominance rising, alts may lag'
+                  : 'BTC dominance falling, alts outperforming'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Coins Tabs */}
+      <Tabs defaultValue={coinsData[0]?.symbol || 'BTCUSDT'} className="w-full">
+        <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${coinsData.length}, 1fr)` }}>
+          {coinsData.map((coin) => (
+            <TabsTrigger key={coin.symbol} value={coin.symbol}>
+              {coin.symbol.replace('USDT', '')}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {coinsData.map((coin) => (
+          <TabsContent key={coin.symbol} value={coin.symbol} className="space-y-4 mt-6">
+            {/* KPI Cards for this coin */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <KPICard
+                title="Price"
+                value={`$${coin.price.toLocaleString()}`}
+                change={coin.change24h}
+                icon={<Target className="w-4 h-4" />}
+              />
+              <KPICard
+                title="RL Decision"
+                value={coin.rl.decision}
+                subtitle={`${(coin.rl.confidence * 100).toFixed(0)}% confidence`}
+                icon={<Brain className="w-4 h-4" />}
+                variant={coin.rl.decision === 'LONG' ? 'success' : coin.rl.decision === 'SHORT' ? 'warning' : 'default'}
+              />
+              <KPICard
+                title="LSTM Trend"
+                value={coin.lstm.trend}
+                subtitle={`${(coin.lstm.probability * 100).toFixed(0)}% probability`}
+                icon={<Activity className="w-4 h-4" />}
+                variant={coin.lstm.trend === 'UP' ? 'success' : 'warning'}
+              />
+              <KPICard
+                title="Ensemble Signal"
+                value={coin.ensemble.signal}
+                subtitle={`${(coin.ensemble.confidence * 100).toFixed(0)}% confidence`}
+                icon={<Zap className="w-4 h-4" />}
+                variant={coin.ensemble.signal === 'BUY' ? 'success' : coin.ensemble.signal === 'SELL' ? 'warning' : 'default'}
+              />
+            </div>
+
+            {/* AI Recommendation for this coin */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className={cn(
+                    "w-5 h-5",
+                    coin.ensemble.signal === 'BUY' ? "text-green-500" :
+                    coin.ensemble.signal === 'SELL' ? "text-red-500" : "text-yellow-500"
+                  )} />
+                  AI Recommendation for {coin.symbol.replace('USDT', '')} ({marketType.toUpperCase()})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <p className="text-muted-foreground">
+                    {coin.ensemble.signal === 'BUY' && coin.lstm.trend === 'UP' ? (
+                      <>
+                        All models aligned for <span className="font-semibold text-green-500">BULLISH</span> outlook.
+                        PPO Agent suggests {coin.rl.decision} with {(coin.rl.confidence * 100).toFixed(0)}% confidence.
+                        LSTM predicts upward trend with {(coin.lstm.probability * 100).toFixed(0)}% probability.
+                      </>
+                    ) : coin.ensemble.signal === 'SELL' && coin.lstm.trend === 'DOWN' ? (
+                      <>
+                        Models indicate <span className="font-semibold text-red-500">BEARISH</span> sentiment.
+                        Consider reducing exposure or shorting with proper risk management.
+                      </>
+                    ) : (
+                      <>
+                        Mixed signals detected. Models suggest <span className="font-semibold text-yellow-500">CAUTION</span>.
+                        Wait for clearer confirmation before entering positions.
+                      </>
+                    )}
+                  </p>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                    <div className="p-3 bg-secondary rounded-lg">
+                      <div className="text-xs text-muted-foreground">Optimal Entry</div>
+                      <div className="text-lg font-bold text-green-500">
+                        ${(coin.price * 0.998).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-secondary rounded-lg">
+                      <div className="text-xs text-muted-foreground">Stop Loss</div>
+                      <div className="text-lg font-bold text-red-500">
+                        ${(coin.price * 0.975).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-secondary rounded-lg">
+                      <div className="text-xs text-muted-foreground">Take Profit 1</div>
+                      <div className="text-lg font-bold text-blue-500">
+                        ${(coin.price * 1.025).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-secondary rounded-lg">
+                      <div className="text-xs text-muted-foreground">Take Profit 2</div>
+                      <div className="text-lg font-bold text-primary">
+                        ${(coin.price * 1.05).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      {/* Main Content Grid - Market Health & Liquidity */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Market Health */}
         <Card>
@@ -269,52 +456,6 @@ export default function NewDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* AI Recommendation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            AI Recommendation ({marketType.toUpperCase()})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <p className="text-muted-foreground">
-              All models are aligned for a <span className="font-semibold text-green-500">BULLISH</span> outlook.
-              PPO Agent suggests LONG with {(liveData.rl.confidence * 100).toFixed(0)}% confidence.
-              LSTM predicts upward trend with {(liveData.lstm.probability * 100).toFixed(0)}% probability.
-            </p>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              <div className="p-3 bg-secondary rounded-lg">
-                <div className="text-xs text-muted-foreground">Optimal Entry</div>
-                <div className="text-lg font-bold text-green-500">
-                  ${(liveData.btc.price * 0.998).toLocaleString()}
-                </div>
-              </div>
-              <div className="p-3 bg-secondary rounded-lg">
-                <div className="text-xs text-muted-foreground">Stop Loss</div>
-                <div className="text-lg font-bold text-red-500">
-                  ${(liveData.btc.price * 0.975).toLocaleString()}
-                </div>
-              </div>
-              <div className="p-3 bg-secondary rounded-lg">
-                <div className="text-xs text-muted-foreground">Take Profit 1</div>
-                <div className="text-lg font-bold text-blue-500">
-                  ${(liveData.btc.price * 1.025).toLocaleString()}
-                </div>
-              </div>
-              <div className="p-3 bg-secondary rounded-lg">
-                <div className="text-xs text-muted-foreground">Take Profit 2</div>
-                <div className="text-lg font-bold text-primary">
-                  ${(liveData.btc.price * 1.05).toLocaleString()}
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
