@@ -7,13 +7,13 @@
  */
 
 import { useState } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, Target, DollarSign, Plus, Trash2, Edit } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, Target, DollarSign, Plus, Trash2, Edit, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
-import { MarketType } from '@/lib/constants';
+import { MarketType, EXCHANGES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 interface HoldingTransaction {
@@ -27,6 +27,7 @@ interface HoldingTransaction {
 interface Holding {
   id: string;
   symbol: string;
+  exchange: string;
   totalAmount: number;
   avgBuyPrice: number;
   currentPrice: number;
@@ -50,12 +51,14 @@ export default function NewPortfolio() {
   const [activeTab, setActiveTab] = useState('real');
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
 
   // Real Portfolio State
   const [holdings, setHoldings] = useState<Holding[]>([
     {
       id: '1',
       symbol: 'BTC',
+      exchange: 'binance',
       totalAmount: 0.5,
       avgBuyPrice: 65000,
       currentPrice: 67500,
@@ -68,6 +71,7 @@ export default function NewPortfolio() {
     {
       id: '2',
       symbol: 'ETH',
+      exchange: 'binance',
       totalAmount: 8,
       avgBuyPrice: 3200,
       currentPrice: 3350,
@@ -77,6 +81,25 @@ export default function NewPortfolio() {
       ],
     },
   ]);
+
+  // CRUD Handlers
+  const handleAddHolding = (newHolding: Omit<Holding, 'id' | 'currentPrice'>) => {
+    const id = Date.now().toString();
+    const currentPrice = newHolding.avgBuyPrice; // Initially set to avg buy price
+    setHoldings(prev => [...prev, { ...newHolding, id, currentPrice }]);
+    setShowAddModal(false);
+  };
+
+  const handleEditHolding = (updatedHolding: Holding) => {
+    setHoldings(prev => prev.map(h => h.id === updatedHolding.id ? updatedHolding : h));
+    setEditingHolding(null);
+  };
+
+  const handleDeleteHolding = (id: string) => {
+    if (confirm('Are you sure you want to delete this holding?')) {
+      setHoldings(prev => prev.filter(h => h.id !== id));
+    }
+  };
 
   // Paper Trading State
   const [paperPositions] = useState<PaperPosition[]>([
@@ -285,10 +308,20 @@ export default function NewPortfolio() {
                             </td>
                             <td className="py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <Button variant="ghost" size="sm">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEditingHolding(holding)}
+                                  title="Edit holding"
+                                >
                                   <Edit className="w-4 h-4" />
                                 </Button>
-                                <Button variant="ghost" size="sm">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteHolding(holding.id)}
+                                  title="Delete holding"
+                                >
                                   <Trash2 className="w-4 h-4 text-destructive" />
                                 </Button>
                               </div>
@@ -461,6 +494,165 @@ export default function NewPortfolio() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add/Edit Modal */}
+      {(showAddModal || editingHolding) && (
+        <HoldingModal
+          holding={editingHolding}
+          onSave={editingHolding ? handleEditHolding : handleAddHolding}
+          onClose={() => {
+            setShowAddModal(false);
+            setEditingHolding(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Holding Modal Component
+interface HoldingModalProps {
+  holding: Holding | null;
+  onSave: (holding: any) => void;
+  onClose: () => void;
+}
+
+function HoldingModal({ holding, onSave, onClose }: HoldingModalProps) {
+  const [formData, setFormData] = useState({
+    symbol: holding?.symbol || '',
+    exchange: holding?.exchange || 'binance',
+    totalAmount: holding?.totalAmount || 0,
+    avgBuyPrice: holding?.avgBuyPrice || 0,
+    marketType: holding?.marketType || 'spot' as MarketType,
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (holding) {
+      // Edit existing
+      onSave({
+        ...holding,
+        ...formData,
+      });
+    } else {
+      // Add new
+      onSave({
+        ...formData,
+        transactions: [],
+      });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>{holding ? 'Edit' : 'Add'} Holding</CardTitle>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          <CardDescription>
+            {holding ? 'Update your holding details' : 'Add a new coin to your portfolio'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="symbol" className="text-sm font-medium mb-2 block">
+                Symbol
+              </label>
+              <input
+                id="symbol"
+                type="text"
+                value={formData.symbol}
+                onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+                placeholder="BTC, ETH, etc."
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="exchange" className="text-sm font-medium mb-2 block">
+                Exchange
+              </label>
+              <select
+                id="exchange"
+                value={formData.exchange}
+                onChange={(e) => setFormData({ ...formData, exchange: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
+              >
+                {EXCHANGES.map((ex) => (
+                  <option key={ex.value} value={ex.value}>
+                    {ex.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="marketType" className="text-sm font-medium mb-2 block">
+                Market Type
+              </label>
+              <select
+                id="marketType"
+                value={formData.marketType}
+                onChange={(e) => setFormData({ ...formData, marketType: e.target.value as MarketType })}
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
+              >
+                <option value="spot">Spot</option>
+                <option value="futures">Futures</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="amount" className="text-sm font-medium mb-2 block">
+                Amount
+              </label>
+              <input
+                id="amount"
+                type="number"
+                step="0.00000001"
+                value={formData.totalAmount}
+                onChange={(e) => setFormData({ ...formData, totalAmount: Number(e.target.value) })}
+                placeholder="0.5"
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="price" className="text-sm font-medium mb-2 block">
+                Average Buy Price ($)
+              </label>
+              <input
+                id="price"
+                type="number"
+                step="0.01"
+                value={formData.avgBuyPrice}
+                onChange={(e) => setFormData({ ...formData, avgBuyPrice: Number(e.target.value) })}
+                placeholder="65000"
+                className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button type="submit" className="flex-1">
+                {holding ? 'Update' : 'Add'} Holding
+              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
