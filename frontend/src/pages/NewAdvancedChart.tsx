@@ -39,6 +39,7 @@ export default function NewAdvancedChart() {
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [showPatterns, setShowPatterns] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -142,6 +143,22 @@ export default function NewAdvancedChart() {
     loadChartData();
   };
 
+  const handleFullscreen = () => {
+    const chartElement = chartContainerRef.current?.parentElement;
+    if (!chartElement) return;
+
+    if (!isFullscreen) {
+      if (chartElement.requestFullscreen) {
+        chartElement.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    setIsFullscreen(!isFullscreen);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -165,6 +182,10 @@ export default function NewAdvancedChart() {
               <Button variant="outline" size="sm" onClick={handleFitContent}>
                 <Maximize2 className="w-4 h-4 mr-2" />
                 Fit Content
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleFullscreen}>
+                <Maximize2 className="w-4 h-4 mr-2" />
+                {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               </Button>
               <Button
                 variant={showPatterns ? 'default' : 'outline'}
