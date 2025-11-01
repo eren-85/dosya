@@ -14,37 +14,39 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
-import { MarketType } from '@/lib/constants';
+import { MarketType, COMMON_SYMBOLS } from '@/lib/constants';
 import { api, ExtendedAnalysis } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Mock scenarios for demo
-const MOCK_SCENARIOS = [
-  {
-    name: 'Bull Breakout Scenario',
-    probability: 0.72,
-    trigger_price: 68000,
-    invalidation_price: 64500,
-    targets: [70000, 72500, 75000],
-    description: 'Price breaks above resistance with strong volume. PPO Agent confidence 78%.',
-  },
-  {
-    name: 'Range Continuation',
-    probability: 0.58,
-    trigger_price: 66500,
-    invalidation_price: 63000,
-    targets: [67500, 68500],
-    description: 'Market remains range-bound. LSTM predicts sideways movement.',
-  },
-  {
-    name: 'Bear Retracement',
-    probability: 0.43,
-    trigger_price: 64000,
-    invalidation_price: 68500,
-    targets: [62000, 60000, 58000],
-    description: 'Potential correction if support breaks. Lower probability scenario.',
-  },
-];
+// Generate scenarios based on current price
+function generateScenarios(currentPrice: number) {
+  return [
+    {
+      name: 'Bull Breakout Scenario',
+      probability: 0.72,
+      trigger_price: currentPrice * 1.02,
+      invalidation_price: currentPrice * 0.97,
+      targets: [currentPrice * 1.05, currentPrice * 1.09, currentPrice * 1.12],
+      description: 'Price breaks above resistance with strong volume. PPO Agent confidence 78%.',
+    },
+    {
+      name: 'Range Continuation',
+      probability: 0.58,
+      trigger_price: currentPrice * 1.00,
+      invalidation_price: currentPrice * 0.95,
+      targets: [currentPrice * 1.015, currentPrice * 1.03],
+      description: 'Market remains range-bound. LSTM predicts sideways movement.',
+    },
+    {
+      name: 'Bear Retracement',
+      probability: 0.43,
+      trigger_price: currentPrice * 0.96,
+      invalidation_price: currentPrice * 1.03,
+      targets: [currentPrice * 0.93, currentPrice * 0.90, currentPrice * 0.87],
+      description: 'Potential correction if support breaks. Lower probability scenario.',
+    },
+  ];
+}
 
 const MOCK_ALERTS = [
   {
@@ -64,28 +66,43 @@ const MOCK_ALERTS = [
 export default function NewAnalysis() {
   const [analysis, setAnalysis] = useState<ExtendedAnalysis>({});
   const [marketType, setMarketType] = useState<MarketType>('spot');
+  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAnalysis();
-  }, [marketType]);
+  }, [marketType, selectedSymbol]);
 
   const fetchAnalysis = async () => {
     setLoading(true);
     try {
-      const data = await api.getExtendedAnalysis('BTCUSDT', '1h');
-      setAnalysis(data);
+      // Fetch current price
+      const endpoint = marketType === 'spot'
+        ? `https://api.binance.com/api/v3/ticker/24hr?symbol=${selectedSymbol}`
+        : `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${selectedSymbol}`;
+
+      const priceResp = await fetch(endpoint);
+      const priceData = await priceResp.json();
+      const price = parseFloat(priceData.lastPrice);
+      setCurrentPrice(price);
+
+      // Fetch AI analysis
+      const data = await api.getExtendedAnalysis(selectedSymbol, '1h');
+
+      // Generate scenarios based on current price
+      const scenarios = generateScenarios(price);
 
       // Add mock data for demo
-      setAnalysis(prev => ({
-        ...prev,
-        scenarios: MOCK_SCENARIOS,
+      setAnalysis({
+        ...data,
+        scenarios: scenarios,
         alerts: MOCK_ALERTS,
-        market_pulse: `${marketType === 'spot' ? 'Spot' : 'Futures'} market showing bullish momentum with strong institutional buying. Order flow analysis suggests accumulation phase. Key support at $64,500 holding firm.`,
+        market_pulse: `${marketType === 'spot' ? 'Spot' : 'Futures'} market for ${selectedSymbol.replace('USDT', '')} showing ${price > 50000 ? 'bullish' : 'neutral'} momentum with institutional interest. Order flow analysis suggests ${price > 50000 ? 'accumulation' : 'consolidation'} phase. Current price: $${price.toLocaleString()}.`,
         asian_killzone: { start: '00:00', end: '09:00', active: false },
         london_killzone: { start: '07:00', end: '16:00', active: true },
         ny_killzone: { start: '13:00', end: '22:00', active: false },
-      }));
+      });
 
       setLoading(false);
     } catch (error) {
@@ -106,7 +123,7 @@ export default function NewAnalysis() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">AI Analysis</h1>
           <p className="text-muted-foreground">
@@ -115,6 +132,41 @@ export default function NewAnalysis() {
         </div>
         <MarketTypeSelector value={marketType} onChange={setMarketType} />
       </div>
+
+      {/* Coin Selector */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Select Coin</CardTitle>
+              <CardDescription>Choose which coin to analyze</CardDescription>
+            </div>
+            {currentPrice && (
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">Current Price</div>
+                <div className="text-2xl font-bold text-primary">
+                  ${currentPrice.toLocaleString()}
+                </div>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {COMMON_SYMBOLS.map((symbol) => (
+              <Badge
+                key={symbol}
+                variant={selectedSymbol === symbol ? 'default' : 'outline'}
+                className="cursor-pointer px-3 py-1.5 text-sm"
+                onClick={() => setSelectedSymbol(symbol)}
+              >
+                {symbol.replace('USDT', '')}
+                {selectedSymbol === symbol && ' ✓'}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <Tabs defaultValue="scenarios" className="w-full">
