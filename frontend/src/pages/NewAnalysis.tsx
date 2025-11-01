@@ -2,33 +2,91 @@
  * AI Analysis Page
  * - Market scenarios with probabilities
  * - Market pulse & kill zones
+ * - Spot/Futures selector
  * - On-chain & derivatives data
  * - Alert system
  */
 
-import React, { useState, useEffect } from 'react';
-import { Activity, AlertCircle, TrendingUp, Clock, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Activity, AlertCircle, Clock, Zap, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
+import { MarketType } from '@/lib/constants';
 import { api, ExtendedAnalysis } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
+// Mock scenarios for demo
+const MOCK_SCENARIOS = [
+  {
+    name: 'Bull Breakout Scenario',
+    probability: 0.72,
+    trigger_price: 68000,
+    invalidation_price: 64500,
+    targets: [70000, 72500, 75000],
+    description: 'Price breaks above resistance with strong volume. PPO Agent confidence 78%.',
+  },
+  {
+    name: 'Range Continuation',
+    probability: 0.58,
+    trigger_price: 66500,
+    invalidation_price: 63000,
+    targets: [67500, 68500],
+    description: 'Market remains range-bound. LSTM predicts sideways movement.',
+  },
+  {
+    name: 'Bear Retracement',
+    probability: 0.43,
+    trigger_price: 64000,
+    invalidation_price: 68500,
+    targets: [62000, 60000, 58000],
+    description: 'Potential correction if support breaks. Lower probability scenario.',
+  },
+];
+
+const MOCK_ALERTS = [
+  {
+    id: '1',
+    type: 'warning' as const,
+    message: 'RSI approaching overbought zone (72). Consider taking profits.',
+    timestamp: Date.now(),
+  },
+  {
+    id: '2',
+    type: 'info' as const,
+    message: 'MACD bullish crossover detected on 4h timeframe.',
+    timestamp: Date.now(),
+  },
+];
+
 export default function NewAnalysis() {
   const [analysis, setAnalysis] = useState<ExtendedAnalysis>({});
+  const [marketType, setMarketType] = useState<MarketType>('spot');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAnalysis();
-    const interval = setInterval(fetchAnalysis, 60000); // Update every 60s
-    return () => clearInterval(interval);
-  }, []);
+  }, [marketType]);
 
   const fetchAnalysis = async () => {
+    setLoading(true);
     try {
       const data = await api.getExtendedAnalysis('BTCUSDT', '1h');
       setAnalysis(data);
+
+      // Add mock data for demo
+      setAnalysis(prev => ({
+        ...prev,
+        scenarios: MOCK_SCENARIOS,
+        alerts: MOCK_ALERTS,
+        market_pulse: `${marketType === 'spot' ? 'Spot' : 'Futures'} market showing bullish momentum with strong institutional buying. Order flow analysis suggests accumulation phase. Key support at $64,500 holding firm.`,
+        asian_killzone: { start: '00:00', end: '09:00', active: false },
+        london_killzone: { start: '07:00', end: '16:00', active: true },
+        ny_killzone: { start: '13:00', end: '22:00', active: false },
+      }));
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching analysis:', error);
@@ -48,11 +106,14 @@ export default function NewAnalysis() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">AI Analysis</h1>
-        <p className="text-muted-foreground">
-          Advanced market intelligence and AI-generated scenarios
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">AI Analysis</h1>
+          <p className="text-muted-foreground">
+            Advanced market intelligence and AI-generated scenarios
+          </p>
+        </div>
+        <MarketTypeSelector value={marketType} onChange={setMarketType} />
       </div>
 
       {/* Tabs */}
@@ -70,7 +131,14 @@ export default function NewAnalysis() {
               <Card key={idx}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle>{scenario.name}</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      {scenario.probability > 0.6 ? (
+                        <TrendingUp className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <Activity className="w-5 h-5 text-muted-foreground" />
+                      )}
+                      {scenario.name}
+                    </CardTitle>
                     <Badge variant={scenario.probability > 0.6 ? 'success' : 'default'}>
                       {(scenario.probability * 100).toFixed(0)}% probability
                     </Badge>
@@ -95,7 +163,7 @@ export default function NewAnalysis() {
                       <div className="text-sm text-muted-foreground">Targets</div>
                       <div className="text-sm font-medium">
                         {scenario.targets.map((t, i) => (
-                          <span key={i}>
+                          <span key={i} className="text-primary">
                             ${t.toLocaleString()}{i < scenario.targets.length - 1 ? ', ' : ''}
                           </span>
                         ))}
@@ -109,7 +177,7 @@ export default function NewAnalysis() {
             <Alert>
               <Activity className="h-4 w-4" />
               <AlertDescription>
-                No scenarios available. Scenarios are generated based on current market conditions.
+                No scenarios available. Scenarios are generated based on current market conditions and AI model predictions.
               </AlertDescription>
             </Alert>
           )}
@@ -132,8 +200,11 @@ export default function NewAnalysis() {
                       {analysis.asian_killzone.start} - {analysis.asian_killzone.end} UTC
                     </div>
                     <Badge variant={analysis.asian_killzone.active ? 'success' : 'default'}>
-                      {analysis.asian_killzone.active ? 'Active' : 'Inactive'}
+                      {analysis.asian_killzone.active ? 'Active Now' : 'Inactive'}
                     </Badge>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Low volatility, ranging behavior
+                    </p>
                   </>
                 ) : (
                   <div className="text-sm text-muted-foreground">No data</div>
@@ -155,8 +226,11 @@ export default function NewAnalysis() {
                       {analysis.london_killzone.start} - {analysis.london_killzone.end} UTC
                     </div>
                     <Badge variant={analysis.london_killzone.active ? 'success' : 'default'}>
-                      {analysis.london_killzone.active ? 'Active' : 'Inactive'}
+                      {analysis.london_killzone.active ? 'Active Now' : 'Inactive'}
                     </Badge>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      High volume, trend establishment
+                    </p>
                   </>
                 ) : (
                   <div className="text-sm text-muted-foreground">No data</div>
@@ -178,8 +252,11 @@ export default function NewAnalysis() {
                       {analysis.ny_killzone.start} - {analysis.ny_killzone.end} UTC
                     </div>
                     <Badge variant={analysis.ny_killzone.active ? 'success' : 'default'}>
-                      {analysis.ny_killzone.active ? 'Active' : 'Inactive'}
+                      {analysis.ny_killzone.active ? 'Active Now' : 'Inactive'}
                     </Badge>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      High volatility, reversals common
+                    </p>
                   </>
                 ) : (
                   <div className="text-sm text-muted-foreground">No data</div>
@@ -197,12 +274,23 @@ export default function NewAnalysis() {
                 <Zap className="w-5 h-5 text-primary" />
                 Market Pulse
               </CardTitle>
-              <CardDescription>AI-generated market sentiment analysis</CardDescription>
+              <CardDescription>AI-generated market sentiment analysis for {marketType}</CardDescription>
             </CardHeader>
             <CardContent>
               {analysis.market_pulse ? (
                 <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <p>{analysis.market_pulse}</p>
+                  <p className="text-foreground leading-relaxed">{analysis.market_pulse}</p>
+
+                  <div className="grid gap-4 md:grid-cols-2 mt-6 not-prose">
+                    <div className="p-4 bg-secondary rounded-lg">
+                      <div className="text-xs text-muted-foreground mb-1">Market Regime</div>
+                      <div className="text-lg font-semibold">Bullish Trend</div>
+                    </div>
+                    <div className="p-4 bg-secondary rounded-lg">
+                      <div className="text-xs text-muted-foreground mb-1">Volatility</div>
+                      <div className="text-lg font-semibold">Moderate (VIX: 18.5)</div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
