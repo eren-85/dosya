@@ -30,7 +30,7 @@ export default function NewTraining() {
   const [symbols, setSymbols] = useState('BTCUSDT,ETHUSDT');
   const [timeframes, setTimeframes] = useState('1h,4h,1d');
   const [marketType, setMarketType] = useState<MarketType>('spot');
-  const [modelType, setModelType] = useState<'ensemble' | 'lstm' | 'transformer' | 'ppo'>('lstm');
+  const [modelType, setModelType] = useState<'ensemble' | 'lstm' | 'transformer' | 'ppo' | 'all'>('lstm');
   const [epochs, setEpochs] = useState(100);
   const [useGPU, setUseGPU] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -38,11 +38,16 @@ export default function NewTraining() {
   const [currentEpoch, setCurrentEpoch] = useState(0);
   const [metrics, setMetrics] = useState<TrainingMetrics[]>([]);
 
+  // Auto-enable GPU for models that need it
+  const getRecommendedDevice = (model: string) => {
+    if (model === 'transformer' || model === 'ppo') return 'cuda'; // GPU required
+    if (model === 'lstm') return useGPU ? 'cuda' : 'cpu'; // GPU recommended
+    return 'cpu'; // Ensemble works fine on CPU
+  };
+
   const handleTrain = async () => {
     clearLog();
     setLoading(true);
-    appendLog(`⏳ Initializing ${modelType.toUpperCase()} model training...\n`);
-    appendLog(`📊 Market Type: ${marketType.toUpperCase()}\n`);
 
     const symbolList = symbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
 
@@ -52,13 +57,44 @@ export default function NewTraining() {
       return;
     }
 
+    // If "all" is selected, train all models sequentially
+    if (modelType === 'all') {
+      const models: Array<'ensemble' | 'lstm' | 'transformer' | 'ppo'> = ['ensemble', 'lstm', 'transformer', 'ppo'];
+      appendLog(`🚀 Training ALL models sequentially...\n`);
+      appendLog(`📊 Market Type: ${marketType.toUpperCase()}\n`);
+      appendLog(`Total models: ${models.length}\n\n`);
+
+      for (const model of models) {
+        await trainSingleModel(model, symbolList);
+        if (model !== models[models.length - 1]) {
+          appendLog('\n' + '='.repeat(50) + '\n\n');
+        }
+      }
+
+      appendLog('\n🎉 All models trained successfully!');
+      setLoading(false);
+      return;
+    }
+
+    // Train single model
+    await trainSingleModel(modelType, symbolList);
+    setLoading(false);
+  };
+
+  const trainSingleModel = async (model: 'ensemble' | 'lstm' | 'transformer' | 'ppo', symbolList: string[]) => {
+    appendLog(`⏳ Initializing ${model.toUpperCase()} model training...\n`);
+    appendLog(`📊 Market Type: ${marketType.toUpperCase()}\n`);
+
+    const device = getRecommendedDevice(model);
+    appendLog(`🖥️  Device: ${device.toUpperCase()}\n`);
+
     try {
       const result = await api.startTraining({
         symbols: symbolList,
         timeframes,
-        model_type: modelType,
+        model_type: model,
         epochs,
-        device: useGPU ? 'cuda' : 'cpu',
+        device,
       });
 
       if (result.ok) {
@@ -93,8 +129,6 @@ export default function NewTraining() {
         appendLog(`Epoch ${i}/${epochs} - Loss: ${(0.7 - i * 0.05).toFixed(4)} - Acc: ${(0.5 + i * 0.04).toFixed(4)}`);
       }
       appendLog('\n✅ Training completed!');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -215,6 +249,7 @@ export default function NewTraining() {
                 className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 disabled={loading}
               >
+                <option value="all">🚀 All Models (Train Sequentially)</option>
                 <option value="ensemble">Ensemble (XGBoost + LightGBM + CatBoost)</option>
                 <option value="lstm">LSTM (Deep Learning)</option>
                 <option value="transformer">Transformer (Deep Learning)</option>
