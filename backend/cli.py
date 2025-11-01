@@ -194,16 +194,18 @@ def _save_csv_parquet(rows: T.List[dict], csv_path: str, parquet: bool):
     except Exception as ex:
         print(f"⚠️  Parquet save failed: {ex}")
         print(f"⚠️  Falling back to CSV.")
+        parquet = False  # Force CSV fallback
 
     # CSV (DEPRECATED - for backward compatibility only)
-    # Only save CSV if explicitly requested or Parquet failed
-    import csv
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in rows:
-            w.writerow(r)
-    print(f"💾 Saved CSV: {csv_path} (deprecated - use Parquet)")
+    # Only save CSV if Parquet is disabled or failed
+    if not parquet:
+        import csv
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in rows:
+                w.writerow(r)
+        print(f"💾 Saved CSV: {csv_path} (fallback)")
 
 
 def cmd_download(args: argparse.Namespace) -> None:
