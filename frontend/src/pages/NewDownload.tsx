@@ -16,8 +16,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
 import { TIMEFRAMES, MarketType, COMMON_SYMBOLS } from '@/lib/constants';
 import { api } from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function NewDownload() {
+  const { t } = useLanguage();
   const [symbols, setSymbols] = useState('BTCUSDT,ETHUSDT');
   const [intervals, setIntervals] = useState('1h,4h,1d');
   const [marketType, setMarketType] = useState<MarketType>('spot');
@@ -148,30 +150,30 @@ export default function NewDownload() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Download Data</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t.download.title}</h1>
         <p className="text-muted-foreground">
-          Download historical market data from exchanges
+          {t.download.subtitle}
         </p>
       </div>
 
       {/* Configuration Form */}
       <Card>
         <CardHeader>
-          <CardTitle>Download Configuration</CardTitle>
+          <CardTitle>{t.download.configuration}</CardTitle>
           <CardDescription>
-            Select market type, symbols, exchange, and timeframes
+            {t.download.configDescription}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Market Type Selector */}
           <div>
-            <label className="text-sm font-medium mb-2 block">Market Type</label>
+            <label className="text-sm font-medium mb-2 block">{t.download.market}</label>
             <MarketTypeSelector value={marketType} onChange={setMarketType} disabled={loading} />
           </div>
 
           {/* Quick Symbol Selection */}
           <div>
-            <label className="text-sm font-medium mb-2 block">Quick Select</label>
+            <label className="text-sm font-medium mb-2 block">{t.download.quickSelect}</label>
             <div className="flex flex-wrap gap-2">
               {COMMON_SYMBOLS.map((symbol) => {
                 const isSelected = symbols.split(',').map(s => s.trim()).includes(symbol);
@@ -193,7 +195,7 @@ export default function NewDownload() {
           {/* Symbols */}
           <div>
             <label htmlFor="symbols" className="text-sm font-medium mb-2 block">
-              Symbols (Custom)
+              {t.download.customSymbols}
             </label>
             <input
               id="symbols"
@@ -212,7 +214,7 @@ export default function NewDownload() {
           {/* Intervals */}
           <div>
             <label htmlFor="intervals" className="text-sm font-medium mb-2 block">
-              Timeframes
+              {t.download.interval}
             </label>
             <input
               id="intervals"
@@ -224,7 +226,7 @@ export default function NewDownload() {
               disabled={loading}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Available: {TIMEFRAMES.map(t => t.value).join(', ')}
+              {t.download.availableTimeframes}: {TIMEFRAMES.map(t => t.value).join(', ')}
             </p>
           </div>
 
@@ -239,7 +241,7 @@ export default function NewDownload() {
               disabled={loading}
             />
             <label htmlFor="all-time" className="text-sm font-medium cursor-pointer">
-              Download all available historical data (may take longer)
+              {t.download.allTime}
             </label>
           </div>
 
@@ -249,12 +251,12 @@ export default function NewDownload() {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Downloading...
+                  {t.download.downloading}
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Start Download
+                  {t.download.startDownload}
                 </>
               )}
             </Button>
@@ -277,7 +279,7 @@ export default function NewDownload() {
         <Card className="border-primary/50">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Download Progress</span>
+              <span>{t.download.downloadProgress}</span>
               <Badge variant="secondary" className="text-base">
                 {completedCount}/{totalCount}
               </Badge>
@@ -344,7 +346,7 @@ export default function NewDownload() {
         <Alert variant="success">
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription>
-            Data download completed successfully! You can now train models with this data.
+            {t.download.successMessage}
           </AlertDescription>
         </Alert>
       )}
@@ -352,7 +354,7 @@ export default function NewDownload() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Download failed. Check the log below for details.
+            {t.download.errorMessage}
           </AlertDescription>
         </Alert>
       )}
@@ -367,7 +369,7 @@ export default function NewDownload() {
         </CardHeader>
         <CardContent>
           <pre className="bg-secondary text-sm p-4 rounded-lg font-mono max-h-96 overflow-auto whitespace-pre-wrap">
-            {log || 'No output yet. Click "Start Download" to begin.'}
+            {log || t.download.noOutputYet}
           </pre>
         </CardContent>
       </Card>

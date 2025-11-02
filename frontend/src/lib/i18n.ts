@@ -67,6 +67,14 @@ export interface Translations {
     quickSelect: string;
     customSymbols: string;
     customSymbolsPlaceholder: string;
+    configuration: string;
+    configDescription: string;
+    startDownload: string;
+    downloadProgress: string;
+    successMessage: string;
+    errorMessage: string;
+    noOutputYet: string;
+    availableTimeframes: string;
   };
 
   // Training
@@ -258,6 +266,14 @@ export const translations: Record<Language, Translations> = {
       quickSelect: 'Quick Select',
       customSymbols: 'Custom Symbols',
       customSymbolsPlaceholder: 'Add custom symbols (comma separated)',
+      configuration: 'Download Configuration',
+      configDescription: 'Select market type, symbols, exchange, and timeframes',
+      startDownload: 'Start Download',
+      downloadProgress: 'Download Progress',
+      successMessage: 'Data download completed successfully! You can now train models with this data.',
+      errorMessage: 'Download failed. Please check the logs and try again.',
+      noOutputYet: 'No output yet. Click "Start Download" to begin.',
+      availableTimeframes: 'Available',
     },
     training: {
       title: 'Train Models',
@@ -435,6 +451,14 @@ export const translations: Record<Language, Translations> = {
       quickSelect: 'Hızlı Seçim',
       customSymbols: 'Özel Semboller',
       customSymbolsPlaceholder: 'Özel sembol ekle (virgülle ayırın)',
+      configuration: 'İndirme Yapılandırması',
+      configDescription: 'Piyasa türü, sembol, borsa ve zaman dilimlerini seçin',
+      startDownload: 'İndirmeyi Başlat',
+      downloadProgress: 'İndirme İlerlemesi',
+      successMessage: 'Veri indirme başarıyla tamamlandı! Artık bu verilerle model eğitebilirsiniz.',
+      errorMessage: 'İndirme başarısız oldu. Lütfen günlükleri kontrol edin ve tekrar deneyin.',
+      noOutputYet: 'Henüz çıktı yok. Başlamak için "İndirmeyi Başlat" düğmesine tıklayın.',
+      availableTimeframes: 'Mevcut',
     },
     training: {
       title: 'Model Eğit',
