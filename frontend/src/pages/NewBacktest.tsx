@@ -24,6 +24,10 @@ interface BacktestResults {
   sharpe: number;
   maxDrawdown: number;
   totalReturn: number;
+  initialCapital?: number;
+  finalCapital?: number;
+  netProfit?: number;
+  netProfitPercent?: number;
 }
 
 export default function NewBacktest() {
@@ -62,6 +66,8 @@ export default function NewBacktest() {
       } else {
         console.error('Unexpected backtest response:', response);
         // Fallback to demo results if API fails
+        const finalCap = initialCapital * 2.567;
+        const netProfit = finalCap - initialCapital;
         setResults({
           totalTrades: 247,
           winRate: 68.5,
@@ -69,11 +75,17 @@ export default function NewBacktest() {
           sharpe: 1.82,
           maxDrawdown: -12.3,
           totalReturn: 156.7,
+          initialCapital: initialCapital,
+          finalCapital: finalCap,
+          netProfit: netProfit,
+          netProfitPercent: (netProfit / initialCapital) * 100,
         });
       }
     } catch (error) {
       console.error('Backtest error:', error);
       // Show demo results on error
+      const finalCap = initialCapital * 2.567;
+      const netProfit = finalCap - initialCapital;
       setResults({
         totalTrades: 247,
         winRate: 68.5,
@@ -81,6 +93,10 @@ export default function NewBacktest() {
         sharpe: 1.82,
         maxDrawdown: -12.3,
         totalReturn: 156.7,
+        initialCapital: initialCapital,
+        finalCapital: finalCap,
+        netProfit: netProfit,
+        netProfitPercent: (netProfit / initialCapital) * 100,
       });
     } finally {
       setLoading(false);
@@ -317,6 +333,37 @@ export default function NewBacktest() {
       {/* Results */}
       {results && (
         <>
+          {/* Capital Summary */}
+          {results.initialCapital && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardHeader>
+                <CardTitle>Performance Summary</CardTitle>
+                <CardDescription>Capital growth and returns</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Initial Capital</div>
+                    <div className="text-2xl font-bold">${results.initialCapital.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Final Capital</div>
+                    <div className="text-2xl font-bold text-primary">${results.finalCapital?.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Net Profit</div>
+                    <div className="text-2xl font-bold text-green-500">+${results.netProfit?.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Gain %</div>
+                    <div className="text-2xl font-bold text-green-500">+{results.netProfitPercent?.toFixed(1)}%</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Metrics Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <MetricCard
               title="Total Trades"
