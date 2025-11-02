@@ -135,17 +135,17 @@ export default function NewAnalysis() {
         <MarketTypeSelector value={marketType} onChange={setMarketType} />
       </div>
 
-      {/* Coin Selector */}
+      {/* Coin & Timeframe Selector */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">Select Coin</CardTitle>
-              <CardDescription>Choose which coin to analyze</CardDescription>
+              <CardTitle className="text-lg">Select Coin & Timeframe</CardTitle>
+              <CardDescription>Choose which coin and timeframe to analyze</CardDescription>
             </div>
             {currentPrice && (
               <div className="text-right">
-                <div className="text-sm text-muted-foreground">Current Price</div>
+                <div className="text-sm text-muted-foreground">Current Price ({selectedTimeframe})</div>
                 <div className="text-2xl font-bold text-primary">
                   ${currentPrice.toLocaleString()}
                 </div>
@@ -153,19 +153,73 @@ export default function NewAnalysis() {
             )}
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {COMMON_SYMBOLS.map((symbol) => (
-              <Badge
-                key={symbol}
-                variant={selectedSymbol === symbol ? 'default' : 'outline'}
-                className="cursor-pointer px-3 py-1.5 text-sm"
-                onClick={() => setSelectedSymbol(symbol)}
+        <CardContent className="space-y-4">
+          {/* Quick Select */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Quick Select</label>
+            <div className="flex flex-wrap gap-2">
+              {COMMON_SYMBOLS.map((symbol) => (
+                <Badge
+                  key={symbol}
+                  variant={selectedSymbol === symbol ? 'default' : 'outline'}
+                  className="cursor-pointer px-3 py-1.5 text-sm"
+                  onClick={() => setSelectedSymbol(symbol)}
+                >
+                  {symbol.replace('USDT', '')}
+                  {selectedSymbol === symbol && ' ✓'}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Symbol */}
+          <div>
+            <label htmlFor="custom-symbol" className="text-sm font-medium mb-2 block">
+              Custom Symbol
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="custom-symbol"
+                type="text"
+                value={customSymbol}
+                onChange={(e) => setCustomSymbol(e.target.value.toUpperCase())}
+                placeholder="ADAUSDT, DOTUSDT, etc."
+                className="flex-1 px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <button
+                onClick={() => {
+                  if (customSymbol && customSymbol.endsWith('USDT')) {
+                    setSelectedSymbol(customSymbol);
+                    setCustomSymbol('');
+                  }
+                }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90"
               >
-                {symbol.replace('USDT', '')}
-                {selectedSymbol === symbol && ' ✓'}
-              </Badge>
-            ))}
+                Add
+              </button>
+            </div>
+          </div>
+
+          {/* Timeframe Selector */}
+          <div>
+            <label htmlFor="timeframe" className="text-sm font-medium mb-2 block">
+              Timeframe
+            </label>
+            <select
+              id="timeframe"
+              value={selectedTimeframe}
+              onChange={(e) => setSelectedTimeframe(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="1m">1 Minute</option>
+              <option value="5m">5 Minutes</option>
+              <option value="15m">15 Minutes</option>
+              <option value="30m">30 Minutes</option>
+              <option value="1h">1 Hour</option>
+              <option value="4h">4 Hours</option>
+              <option value="1d">1 Day</option>
+              <option value="1w">1 Week</option>
+            </select>
           </div>
         </CardContent>
       </Card>
