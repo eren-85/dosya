@@ -99,7 +99,7 @@ export default function NewPDFLearning() {
     setTimeout(() => {
       const aiMessage: ChatMessage = {
         role: 'assistant',
-        content: `⚠️ **Backend RAG sistemi henüz aktif değil.**\n\nSorunuz: "${question}"\n\nBu özellik şu anda demo modunda çalışıyor. Gerçek üretim ortamında:\n- PDF'leriniz vector database'e yüklenecek\n- AI, PDF içeriğinde arama yapacak\n- Kaynaklarla birlikte detaylı cevaplar verecek\n\nBackend entegrasyonu için: \`backend.learning.pdf_rag\` modülünü kullanın.`,
+        content: `🤖 **RL Agent Eğitim Sistemi**\n\nPDF'leriniz Reinforcement Learning agent'ını eğitmek için kullanılıyor.\n\n**Amaç:**\n- Trading psikolojisi, davranış kalıpları ve smart money stratejilerini öğrenmek\n- Retail trader hatalarından kaçınmak\n- Büyük oyuncuların (whales, kurumsal yatırımcılar) stratejilerini taklit etmek\n\n**Nasıl Çalışır:**\n- PDF içerikleri analiz edilir ve yapılandırılır\n- RL agent bu bilgileri reward function'ına entegre eder\n- Model, öğrenilen stratejilere göre trade kararları verir\n\n**Demo Modu:** Gerçek üretimde PDF'ler işlenir ve model eğitim pipeline'ına eklenir.\n\nBackend: \`backend.learning.pdf_rag\` → \`backend.models.ppo_agent\``,
         timestamp: new Date().toISOString(),
       };
       setMessages(prev => [...prev, aiMessage]);
@@ -117,9 +117,9 @@ export default function NewPDFLearning() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">PDF Learning (RAG)</h1>
+        <h1 className="text-3xl font-bold tracking-tight">PDF Learning (RL Training)</h1>
         <p className="text-muted-foreground">
-          Upload PDF documents and ask questions using AI-powered retrieval
+          Upload trading psychology, smart money strategies, and market behavior PDFs to train the RL agent
         </p>
       </div>
 
@@ -128,10 +128,10 @@ export default function NewPDFLearning() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BookOpen className="w-5 h-5" />
-            Upload PDFs
+            Upload Training PDFs
           </CardTitle>
           <CardDescription>
-            Upload technical analysis books, research papers, or trading guides
+            Upload trading psychology, smart money strategies, whale behavior analysis, and institutional trading PDFs
           </CardDescription>
         </CardHeader>
         <CardContent>
