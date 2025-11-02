@@ -173,6 +173,7 @@ export default function NewAnalysis() {
         <TabsList>
           <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
           <TabsTrigger value="technical">Technical Analysis</TabsTrigger>
+          <TabsTrigger value="risk">Risk Assessment</TabsTrigger>
           <TabsTrigger value="killzones">Kill Zones</TabsTrigger>
           <TabsTrigger value="pulse">Market Pulse</TabsTrigger>
         </TabsList>
@@ -385,6 +386,195 @@ export default function NewAnalysis() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Risk Assessment Tab */}
+        <TabsContent value="risk" className="space-y-4 mt-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Risk Level Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Overall Risk Level</CardTitle>
+                <CardDescription>Based on volatility, market conditions, and technical signals</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-center py-6">
+                  <div className="text-center">
+                    <div className="text-5xl font-bold text-yellow-500 mb-2">MEDIUM</div>
+                    <Badge variant="warning" className="text-sm px-4 py-1">
+                      Risk Score: 5.2 / 10
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Risk Meter</span>
+                    <span className="font-medium">52%</span>
+                  </div>
+                  <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"
+                      style={{ width: '52%' }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Low</span>
+                    <span>Medium</span>
+                    <span>High</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Volatility (24h)</span>
+                    <span className="font-medium text-yellow-500">3.8%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Market Trend</span>
+                    <Badge variant="success">Bullish</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Liquidity</span>
+                    <Badge>High</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Position Size Recommendations */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Position Size Calculator</CardTitle>
+                <CardDescription>Recommended position sizes based on account size</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Account Size ($)</label>
+                    <input
+                      type="number"
+                      defaultValue="10000"
+                      className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Risk Per Trade (%)</label>
+                    <input
+                      type="number"
+                      defaultValue="2"
+                      step="0.5"
+                      className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t space-y-3">
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <div className="text-xs text-muted-foreground mb-1">Recommended Position Size</div>
+                    <div className="text-2xl font-bold text-primary">$200</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      (2% of $10,000 account)
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-secondary p-3 rounded-lg">
+                      <div className="text-xs text-muted-foreground">Stop Loss</div>
+                      <div className="text-lg font-semibold text-red-500">
+                        ${currentPrice ? (currentPrice * 0.97).toLocaleString() : '—'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">(-3%)</div>
+                    </div>
+                    <div className="bg-secondary p-3 rounded-lg">
+                      <div className="text-xs text-muted-foreground">Take Profit</div>
+                      <div className="text-lg font-semibold text-green-500">
+                        ${currentPrice ? (currentPrice * 1.06).toLocaleString() : '—'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">(+6%)</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm p-2 bg-secondary rounded">
+                    <span className="text-muted-foreground">Risk/Reward Ratio</span>
+                    <Badge variant="success">1:2</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Risk Factors */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Key Risk Factors</CardTitle>
+              <CardDescription>Factors influencing current risk assessment</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-sm font-medium">Market Structure</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Clean uptrend with higher highs and higher lows. Structure intact.
+                  </p>
+                </div>
+
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                    <span className="text-sm font-medium">Volume Profile</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Moderate volume. Watch for volume confirmation on breakouts.
+                  </p>
+                </div>
+
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-sm font-medium">Correlation Risk</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Low correlation with other positions. Good diversification.
+                  </p>
+                </div>
+
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                    <span className="text-sm font-medium">News Events</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Fed meeting in 3 days. Consider reducing size before event.
+                  </p>
+                </div>
+
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-sm font-medium">Funding Rate</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Neutral funding (0.01%). No extreme leverage imbalance.
+                  </p>
+                </div>
+
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-sm font-medium">Liquidity</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    High liquidity. Tight spreads. Easy entry/exit available.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Kill Zones Tab */}
