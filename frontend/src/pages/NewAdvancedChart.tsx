@@ -45,6 +45,10 @@ export default function NewAdvancedChart() {
   const [interval, setInterval] = useState('1h');
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [showPatterns, setShowPatterns] = useState(true);
+  const [showEMA, setShowEMA] = useState(true);
+  const [showOrderBlocks, setShowOrderBlocks] = useState(true);
+  const [showFVG, setShowFVG] = useState(true);
+  const [showLiquiditySweeps, setShowLiquiditySweeps] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -100,10 +104,10 @@ export default function NewAdvancedChart() {
     };
   }, []);
 
-  // Reload data when symbol, interval, or marketType changes
+  // Reload data when symbol, interval, marketType, or toggles change
   useEffect(() => {
     loadChartData();
-  }, [symbol, interval, marketType]);
+  }, [symbol, interval, marketType, showEMA, showOrderBlocks, showFVG, showLiquiditySweeps]);
 
   const loadChartData = async () => {
     if (!seriesRef.current) return;
@@ -143,11 +147,13 @@ export default function NewAdvancedChart() {
 
       seriesRef.current.setData(formattedData);
 
-      // Add EMA lines
-      addEMALines(formattedData);
+      // Add EMA lines (if enabled)
+      if (showEMA) {
+        addEMALines(formattedData);
+      }
 
-      // Add pattern indicators if enabled
-      if (showPatterns && formattedData.length > 0) {
+      // Add pattern indicators (if enabled)
+      if (formattedData.length > 0) {
         addPatternIndicators(formattedData);
       }
 
@@ -177,67 +183,78 @@ export default function NewAdvancedChart() {
     const liquiditySweeps = detectLiquiditySweeps(data);
     console.log('[Chart] Liquidity Sweeps detected:', liquiditySweeps.length, liquiditySweeps);
 
-    // Add markers for patterns
+    // Add markers for patterns (conditionally based on toggles)
     const markers: any[] = [];
 
-    // Order Block markers
-    orderBlocks.forEach((ob) => {
-      markers.push({
-        time: ob.time,
-        position: ob.type === 'bullish' ? 'belowBar' : 'aboveBar',
-        color: ob.type === 'bullish' ? '#22c55e' : '#ef4444',
-        shape: 'square',
-        text: 'OB',
+    // Order Block markers (if enabled)
+    if (showOrderBlocks) {
+      orderBlocks.forEach((ob) => {
+        markers.push({
+          time: ob.time,
+          position: ob.type === 'bullish' ? 'belowBar' : 'aboveBar',
+          color: ob.type === 'bullish' ? '#22c55e' : '#ef4444',
+          shape: 'square',
+          text: 'OB',
+        });
       });
-    });
+    }
 
-    // Fair Value Gap markers (NEW)
-    fvgAreas.forEach((fvg) => {
-      markers.push({
-        time: fvg.time,
-        position: fvg.type === 'bullish' ? 'belowBar' : 'aboveBar',
-        color: fvg.type === 'bullish' ? '#3b82f6' : '#f97316',
-        shape: 'circle',
-        text: 'FVG',
+    // Fair Value Gap markers (if enabled)
+    if (showFVG) {
+      fvgAreas.forEach((fvg) => {
+        markers.push({
+          time: fvg.time,
+          position: fvg.type === 'bullish' ? 'belowBar' : 'aboveBar',
+          color: fvg.type === 'bullish' ? '#3b82f6' : '#f97316',
+          shape: 'circle',
+          text: 'FVG',
+        });
       });
-    });
+    }
 
-    // Liquidity Sweep markers
-    liquiditySweeps.forEach((ls) => {
-      markers.push({
-        time: ls.time,
-        position: ls.type === 'high' ? 'aboveBar' : 'belowBar',
-        color: '#eab308',
-        shape: 'arrowDown',
-        text: 'LS',
+    // Liquidity Sweep markers (if enabled)
+    if (showLiquiditySweeps) {
+      liquiditySweeps.forEach((ls) => {
+        markers.push({
+          time: ls.time,
+          position: ls.type === 'high' ? 'aboveBar' : 'belowBar',
+          color: '#eab308',
+          shape: 'arrowDown',
+          text: 'LS',
+        });
       });
-    });
+    }
 
-    console.log('[Chart] Total markers to add:', markers.length, markers);
+    // Sort markers by time (REQUIRED by TradingView Lightweight Charts)
+    markers.sort((a, b) => a.time - b.time);
+    console.log('[Chart] Total markers to add (sorted):', markers.length);
+
     seriesRef.current.setMarkers(markers);
 
-    // Add price lines for FVG zones
-    fvgAreas.forEach((fvg, idx) => {
-      // Top line of FVG zone
-      seriesRef.current?.createPriceLine({
-        price: fvg.top,
-        color: fvg.type === 'bullish' ? '#3b82f680' : '#f9731680',
-        lineWidth: 2,
-        lineStyle: 0, // Solid
-        axisLabelVisible: false,
-        title: `FVG ${fvg.type === 'bullish' ? '↑' : '↓'}`,
-      });
+    // Add price lines for FVG zones (if enabled)
+    if (showFVG) {
+      fvgAreas.forEach((fvg, idx) => {
+        // Top line of FVG zone
+        seriesRef.current?.createPriceLine({
+          price: fvg.top,
+          color: fvg.type === 'bullish' ? '#3b82f680' : '#f9731680',
+          lineWidth: 2,
+          lineStyle: 0, // Solid
+          axisLabelVisible: false,
+          title: `FVG ${fvg.type === 'bullish' ? '↑' : '↓'}`,
+        });
 
-      // Bottom line of FVG zone
-      seriesRef.current?.createPriceLine({
-        price: fvg.bottom,
-        color: fvg.type === 'bullish' ? '#3b82f680' : '#f9731680',
-        lineWidth: 2,
-        lineStyle: 0, // Solid
-        axisLabelVisible: false,
-        title: '',
+        // Bottom line of FVG zone
+        seriesRef.current?.createPriceLine({
+          price: fvg.bottom,
+          color: fvg.type === 'bullish' ? '#3b82f680' : '#f9731680',
+          lineWidth: 2,
+          lineStyle: 0, // Solid
+          axisLabelVisible: false,
+          title: '',
+        });
       });
-    });
+    }
 
     // Add price lines for support/resistance
     const supportResistance = detectSupportResistance(data);
@@ -510,7 +527,7 @@ export default function NewAdvancedChart() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Chart Controls</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -523,14 +540,42 @@ export default function NewAdvancedChart() {
                 <Maximize2 className="w-4 h-4 mr-2" />
                 {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               </Button>
-              <Button
-                variant={showPatterns ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setShowPatterns(!showPatterns)}
-              >
-                {showPatterns ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}
-                Patterns
-              </Button>
+
+              {/* Indicator Toggles */}
+              <div className="flex items-center gap-1 ml-2 pl-2 border-l">
+                <Button
+                  variant={showEMA ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowEMA(!showEMA)}
+                  title="Toggle EMA lines"
+                >
+                  EMA
+                </Button>
+                <Button
+                  variant={showOrderBlocks ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowOrderBlocks(!showOrderBlocks)}
+                  title="Toggle Order Blocks"
+                >
+                  OB
+                </Button>
+                <Button
+                  variant={showFVG ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowFVG(!showFVG)}
+                  title="Toggle Fair Value Gaps"
+                >
+                  FVG
+                </Button>
+                <Button
+                  variant={showLiquiditySweeps ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowLiquiditySweeps(!showLiquiditySweeps)}
+                  title="Toggle Liquidity Sweeps"
+                >
+                  LS
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -603,7 +648,7 @@ export default function NewAdvancedChart() {
       </div>
 
       {/* Pattern Legend */}
-      {showPatterns && (
+      {(showEMA || showOrderBlocks || showFVG || showLiquiditySweeps) && (
         <Card>
           <CardHeader>
             <CardTitle>Smart Money Concepts & Patterns</CardTitle>
