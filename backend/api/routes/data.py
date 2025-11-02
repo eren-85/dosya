@@ -48,48 +48,62 @@ def read_historical_data(
     filename = f"{symbol}_{normalized_tf}_{market_type}.parquet"
     filepath = DATA_DIR / filename
 
-    log.info(f"Attempting to read: {filepath}")
+    log.info(f"Attempting to read Parquet: {filepath}")
 
     if not filepath.exists():
-        log.warning(f"File not found: {filepath}")
-        return None
+        # Try CSV as fallback
+        csv_filename = f"{symbol}_{normalized_tf}_{market_type}.csv"
+        csv_filepath = DATA_DIR / csv_filename
+        log.info(f"Parquet not found, trying CSV: {csv_filepath}")
 
-    try:
-        # Read parquet file
-        df = pd.read_parquet(filepath)
+        if not csv_filepath.exists():
+            log.warning(f"Neither Parquet nor CSV found for {symbol} {normalized_tf}")
+            return None
 
-        # Get last N candles (or all if limit=0)
-        if limit > 0:
-            df = df.tail(limit)
-        # else: return all candles
+        # Read CSV file
+        try:
+            df = pd.read_csv(csv_filepath)
+            log.info(f"Reading from CSV: {csv_filepath}")
+        except Exception as e:
+            log.error(f"Error reading CSV {csv_filepath}: {e}")
+            return None
+    else:
+        # Read Parquet file
+        try:
+            df = pd.read_parquet(filepath)
+            log.info(f"Reading from Parquet: {filepath}")
+        except Exception as e:
+            log.error(f"Error reading Parquet {filepath}: {e}")
+            return None
 
-        log.info(f"Returning {len(df)} candles (limit={limit})")
+    # Get last N candles (or all if limit=0)
+    if limit > 0:
+        df = df.tail(limit)
+    # else: return all candles
 
-        # Convert to list of dicts for API response
-        candles = []
-        for idx, row in df.iterrows():
-            # Handle datetime index
-            if isinstance(idx, pd.Timestamp):
-                timestamp = int(idx.timestamp())
-            else:
-                # If not datetime index, check for timestamp column
-                timestamp = int(row.get('timestamp', row.get('open_time', pd.Timestamp.now().timestamp())))
+    log.info(f"Returning {len(df)} candles (limit={limit})")
 
-            candles.append({
-                "time": timestamp,
-                "open": float(row.get('open', row.get('Open', 0))),
-                "high": float(row.get('high', row.get('High', 0))),
-                "low": float(row.get('low', row.get('Low', 0))),
-                "close": float(row.get('close', row.get('Close', 0))),
-                "volume": float(row.get('volume', row.get('Volume', 0))),
-            })
+    # Convert to list of dicts for API response
+    candles = []
+    for idx, row in df.iterrows():
+        # Handle datetime index
+        if isinstance(idx, pd.Timestamp):
+            timestamp = int(idx.timestamp())
+        else:
+            # If not datetime index, check for timestamp column
+            timestamp = int(row.get('timestamp', row.get('open_time', pd.Timestamp.now().timestamp())))
 
-        log.info(f"Successfully read {len(candles)} candles from {filename}")
-        return candles
+        candles.append({
+            "time": timestamp,
+            "open": float(row.get('open', row.get('Open', 0))),
+            "high": float(row.get('high', row.get('High', 0))),
+            "low": float(row.get('low', row.get('Low', 0))),
+            "close": float(row.get('close', row.get('Close', 0))),
+            "volume": float(row.get('volume', row.get('Volume', 0))),
+        })
 
-    except Exception as e:
-        log.error(f"Error reading {filepath}: {e}")
-        return None
+    log.info(f"Successfully read {len(candles)} candles")
+    return candles
 
 
 def fetch_binance_live_data(
