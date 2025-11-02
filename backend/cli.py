@@ -165,47 +165,25 @@ def _iterate_klines(symbol: str, interval: str, market: str, start_ms: int, end_
 
 
 def _save_csv_parquet(rows: T.List[dict], csv_path: str, parquet: bool):
-    """Write data to Parquet (primary format) and optionally CSV (deprecated)."""
+    """Write data to Parquet format ONLY. CSV support removed."""
     ensure_dir(os.path.dirname(csv_path))
-    fieldnames = list(rows[0].keys()) if rows else [
-        "open_time","open","high","low","close","volume","close_time",
-        "quote_volume","n_trades","taker_buy_base","taker_buy_quote","market"
-    ]
 
-    # Parquet (PRIMARY format)
+    # Parquet ONLY - no CSV fallback
     parquet_path = csv_path.replace(".csv", ".parquet")
+
     if pd is None:
-        print("⚠️  pandas (and pyarrow/fastparquet) not installed, cannot save Parquet.")
-        print("⚠️  Falling back to CSV only.")
-        # Fall back to CSV if pandas not available
-        import csv
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=fieldnames)
-            w.writeheader()
-            for r in rows:
-                w.writerow(r)
-        print(f"💾 Saved CSV: {csv_path}")
-        return
+        raise RuntimeError(
+            "⚠️  pandas (and pyarrow/fastparquet) not installed.\n"
+            "Install with: pip install pandas pyarrow\n"
+            "Parquet is required - CSV support has been removed."
+        )
 
     try:
         df = pd.DataFrame(rows)
         df.to_parquet(parquet_path, index=False)
         print(f"💾 Saved Parquet: {parquet_path}")
     except Exception as ex:
-        print(f"⚠️  Parquet save failed: {ex}")
-        print(f"⚠️  Falling back to CSV.")
-        parquet = False  # Force CSV fallback
-
-    # CSV (DEPRECATED - for backward compatibility only)
-    # Only save CSV if Parquet is disabled or failed
-    if not parquet:
-        import csv
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=fieldnames)
-            w.writeheader()
-            for r in rows:
-                w.writerow(r)
-        print(f"💾 Saved CSV: {csv_path} (fallback)")
+        raise RuntimeError(f"⚠️  Parquet save failed: {ex}\nCannot save data - CSV fallback has been removed.")
 
 
 def cmd_download(args: argparse.Namespace) -> None:
