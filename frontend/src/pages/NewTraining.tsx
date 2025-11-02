@@ -289,6 +289,28 @@ export default function NewTraining() {
               Use GPU (CUDA) {useGPU && <Badge variant="success" className="ml-2">Enabled</Badge>}
             </label>
           </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {modelType === 'lstm' && (
+              <span className="text-yellow-500 font-medium">
+                ⚡ LSTM: Check "Use GPU" above for faster training (GPU recommended)
+              </span>
+            )}
+            {(modelType === 'transformer' || modelType === 'ppo') && (
+              <span className="text-red-500 font-medium">
+                🔥 {modelType === 'transformer' ? 'Transformer' : 'PPO'}: GPU is required (auto-enabled)
+              </span>
+            )}
+            {modelType === 'ensemble' && (
+              <span className="text-green-500 font-medium">
+                ✓ Ensemble: Works well on CPU (GPU optional)
+              </span>
+            )}
+            {modelType === 'all' && (
+              <span className="text-blue-500 font-medium">
+                📦 All Models: LSTM will use GPU if checked, Transformer/PPO require GPU
+              </span>
+            )}
+          </p>
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
