@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi } from 'lightweight-charts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Maximize2,
