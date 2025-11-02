@@ -34,6 +34,12 @@ export default function NewAdvancedChart() {
   const chartCardRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const emaSeriesRefs = useRef<{
+    ema21?: ISeriesApi<'Line'>;
+    ema50?: ISeriesApi<'Line'>;
+    ema100?: ISeriesApi<'Line'>;
+    ema200?: ISeriesApi<'Line'>;
+  }>({});
 
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [interval, setInterval] = useState('1h');
@@ -161,6 +167,9 @@ export default function NewAdvancedChart() {
 
       seriesRef.current.setData(formattedData);
 
+      // Add EMA lines
+      addEMALines(formattedData);
+
       // Add pattern indicators if enabled
       if (showPatterns && formattedData.length > 0) {
         addPatternIndicators(formattedData);
@@ -207,14 +216,19 @@ export default function NewAdvancedChart() {
   const addPatternIndicators = (data: CandleData[]) => {
     if (!seriesRef.current || !chartRef.current) return;
 
+    console.log('[Chart] Adding pattern indicators, data length:', data.length);
+
     // Detect Order Blocks (simplified algorithm)
     const orderBlocks = detectOrderBlocks(data);
+    console.log('[Chart] Order Blocks detected:', orderBlocks.length, orderBlocks);
 
     // Detect Fair Value Gaps
     const fvgAreas = detectFairValueGaps(data);
+    console.log('[Chart] FVG Areas detected:', fvgAreas.length, fvgAreas);
 
     // Detect Liquidity Sweeps
     const liquiditySweeps = detectLiquiditySweeps(data);
+    console.log('[Chart] Liquidity Sweeps detected:', liquiditySweeps.length, liquiditySweeps);
 
     // Add markers for patterns
     const markers: any[] = [];
@@ -252,6 +266,7 @@ export default function NewAdvancedChart() {
       });
     });
 
+    console.log('[Chart] Total markers to add:', markers.length, markers);
     seriesRef.current.setMarkers(markers);
 
     // Add price lines for FVG zones
@@ -279,6 +294,7 @@ export default function NewAdvancedChart() {
 
     // Add price lines for support/resistance
     const supportResistance = detectSupportResistance(data);
+    console.log('[Chart] Support/Resistance levels:', supportResistance.length);
     supportResistance.forEach((level) => {
       seriesRef.current?.createPriceLine({
         price: level.price,
@@ -313,18 +329,18 @@ export default function NewAdvancedChart() {
     return aggregated;
   };
 
-  // Pattern detection algorithms (simplified versions)
+  // Pattern detection algorithms (more sensitive for better detection)
   const detectOrderBlocks = (data: CandleData[]) => {
     const blocks: any[] = [];
-    for (let i = 5; i < data.length - 5; i++) {
+    for (let i = 3; i < data.length - 3; i++) {
       const candle = data[i];
-      const prevCandles = data.slice(i - 5, i);
-      const nextCandles = data.slice(i + 1, i + 6);
+      const prevCandles = data.slice(i - 3, i);
+      const nextCandles = data.slice(i + 1, i + 4);
 
       // Bullish Order Block: Strong bearish candle followed by bullish movement
       const isBearish = candle.close < candle.open;
-      const strongMove = Math.abs(candle.close - candle.open) > (candle.high - candle.low) * 0.7;
-      const bullishAfter = nextCandles.filter(c => c.close > c.open).length >= 3;
+      const strongMove = Math.abs(candle.close - candle.open) > (candle.high - candle.low) * 0.5; // Less strict
+      const bullishAfter = nextCandles.filter(c => c.close > c.open).length >= 2; // Less strict
 
       if (isBearish && strongMove && bullishAfter) {
         blocks.push({ time: candle.time, type: 'bullish', price: candle.low });
@@ -332,13 +348,13 @@ export default function NewAdvancedChart() {
 
       // Bearish Order Block: Strong bullish candle followed by bearish movement
       const isBullish = candle.close > candle.open;
-      const bearishAfter = nextCandles.filter(c => c.close < c.open).length >= 3;
+      const bearishAfter = nextCandles.filter(c => c.close < c.open).length >= 2; // Less strict
 
       if (isBullish && strongMove && bearishAfter) {
         blocks.push({ time: candle.time, type: 'bearish', price: candle.high });
       }
     }
-    return blocks.slice(-10); // Return last 10 order blocks
+    return blocks.slice(-15); // Return last 15 order blocks (more patterns)
   };
 
   const detectFairValueGaps = (data: CandleData[]) => {
@@ -373,23 +389,23 @@ export default function NewAdvancedChart() {
 
   const detectLiquiditySweeps = (data: CandleData[]) => {
     const sweeps: any[] = [];
-    for (let i = 20; i < data.length; i++) {
+    for (let i = 10; i < data.length; i++) { // Less history needed
       const curr = data[i];
-      const recent = data.slice(i - 20, i);
+      const recent = data.slice(i - 10, i);
       const recentHigh = Math.max(...recent.map(d => d.high));
       const recentLow = Math.min(...recent.map(d => d.low));
 
-      // Sweep high (liquidity grab above)
-      if (curr.high > recentHigh && curr.close < curr.open) {
+      // Sweep high (liquidity grab above) - less strict
+      if (curr.high >= recentHigh * 1.001) { // Just 0.1% above is enough
         sweeps.push({ time: curr.time, type: 'high', price: curr.high });
       }
 
-      // Sweep low (liquidity grab below)
-      if (curr.low < recentLow && curr.close > curr.open) {
+      // Sweep low (liquidity grab below) - less strict
+      if (curr.low <= recentLow * 0.999) { // Just 0.1% below is enough
         sweeps.push({ time: curr.time, type: 'low', price: curr.low });
       }
     }
-    return sweeps.slice(-8); // Return last 8 sweeps
+    return sweeps.slice(-12); // Return last 12 sweeps (more patterns)
   };
 
   const detectSupportResistance = (data: CandleData[]) => {
@@ -406,6 +422,85 @@ export default function NewAdvancedChart() {
     levels.push({ price: low + range * 0.618, type: 'resistance' }); // Fibonacci
 
     return levels;
+  };
+
+  // Calculate EMA (Exponential Moving Average)
+  const calculateEMA = (data: CandleData[], period: number) => {
+    const emaData: { time: number; value: number }[] = [];
+    const k = 2 / (period + 1);
+
+    // Start with SMA for the first value
+    let ema = 0;
+    for (let i = 0; i < Math.min(period, data.length); i++) {
+      ema += data[i].close;
+    }
+    ema = ema / Math.min(period, data.length);
+
+    for (let i = period - 1; i < data.length; i++) {
+      if (i === period - 1) {
+        emaData.push({ time: data[i].time, value: ema });
+      } else {
+        ema = data[i].close * k + ema * (1 - k);
+        emaData.push({ time: data[i].time, value: ema });
+      }
+    }
+
+    return emaData;
+  };
+
+  // Add EMA lines to chart
+  const addEMALines = (data: CandleData[]) => {
+    if (!chartRef.current || data.length < 200) return; // Need enough data for EMA 200
+
+    console.log('[Chart] Adding EMA lines...');
+
+    // Calculate EMAs
+    const ema21 = calculateEMA(data, 21);
+    const ema50 = calculateEMA(data, 50);
+    const ema100 = calculateEMA(data, 100);
+    const ema200 = calculateEMA(data, 200);
+
+    // Add or update EMA 21 (Yellow)
+    if (!emaSeriesRefs.current.ema21) {
+      emaSeriesRefs.current.ema21 = chartRef.current.addLineSeries({
+        color: '#eab308',
+        lineWidth: 2,
+        title: 'EMA 21',
+      });
+    }
+    emaSeriesRefs.current.ema21.setData(ema21);
+
+    // Add or update EMA 50 (Blue)
+    if (!emaSeriesRefs.current.ema50) {
+      emaSeriesRefs.current.ema50 = chartRef.current.addLineSeries({
+        color: '#3b82f6',
+        lineWidth: 2,
+        title: 'EMA 50',
+      });
+    }
+    emaSeriesRefs.current.ema50.setData(ema50);
+
+    // Add or update EMA 100 (Purple)
+    if (!emaSeriesRefs.current.ema100) {
+      emaSeriesRefs.current.ema100 = chartRef.current.addLineSeries({
+        color: '#a855f7',
+        lineWidth: 2,
+        title: 'EMA 100',
+      });
+    }
+    emaSeriesRefs.current.ema100.setData(ema100);
+
+    // Add or update EMA 200 (Red)
+    if (!emaSeriesRefs.current.ema200) {
+      emaSeriesRefs.current.ema200 = chartRef.current.addLineSeries({
+        color: '#ef4444',
+        lineWidth: 3,
+        title: 'EMA 200',
+      });
+    }
+    emaSeriesRefs.current.ema200.setData(ema200);
+
+    console.log('[Chart] EMA lines added successfully');
   };
 
   const handleFitContent = () => {
