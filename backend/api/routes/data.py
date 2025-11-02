@@ -19,7 +19,13 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/data", tags=["data"])
 
 # Data directory
-DATA_DIR = Path("/app/data/historical") if os.path.exists("/app/data/historical") else Path("data/historical")
+# In Docker: /app/data/historical
+# In development: /home/user/dosya/data/historical (relative to backend/api/routes/data.py)
+if os.path.exists("/app/data/historical"):
+    DATA_DIR = Path("/app/data/historical")
+else:
+    # Go up 4 levels from backend/api/routes/data.py to reach project root
+    DATA_DIR = Path(__file__).parent.parent.parent.parent / "data" / "historical"
 
 
 def read_historical_data(
