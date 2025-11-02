@@ -33,6 +33,7 @@ import { MarketTypeSelector } from '@/components/common/MarketTypeSelector';
 import { MarketType, COMMON_SYMBOLS } from '@/lib/constants';
 import { api, ExtendedAnalysis } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CoinData {
   symbol: string;
