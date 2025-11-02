@@ -67,12 +67,14 @@ export default function NewAnalysis() {
   const [analysis, setAnalysis] = useState<ExtendedAnalysis>({});
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1h');
+  const [customSymbol, setCustomSymbol] = useState('');
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAnalysis();
-  }, [marketType, selectedSymbol]);
+  }, [marketType, selectedSymbol, selectedTimeframe]);
 
   const fetchAnalysis = async () => {
     setLoading(true);
@@ -88,7 +90,7 @@ export default function NewAnalysis() {
       setCurrentPrice(price);
 
       // Fetch AI analysis
-      const data = await api.getExtendedAnalysis(selectedSymbol, '1h');
+      const data = await api.getExtendedAnalysis(selectedSymbol, selectedTimeframe);
 
       // Generate scenarios based on current price
       const scenarios = generateScenarios(price);
