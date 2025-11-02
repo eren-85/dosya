@@ -103,23 +103,55 @@ export default function NewAdvancedChart() {
 
     setLoading(true);
     try {
-      // Fetch maximum allowed candles from Binance API
-      // Spot: 1000 max, Futures: 1500 max
-      const maxLimit = marketType === 'spot' ? 1000 : 1500;
-      const endpoint = marketType === 'spot'
-        ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`
-        : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`;
+      let formattedData: CandleData[];
 
-      const response = await fetch(endpoint);
-      const data = await response.json();
+      // Check if interval needs aggregation
+      const aggregationMap: Record<string, { base: string; factor: number }> = {
+        '2h': { base: '1h', factor: 2 },
+        '6h': { base: '1h', factor: 6 },
+        '8h': { base: '1h', factor: 8 },
+        '12h': { base: '1h', factor: 12 },
+      };
 
-      const formattedData: CandleData[] = data.map((candle: any[]) => ({
-        time: Math.floor(candle[0] / 1000), // Convert to seconds
-        open: parseFloat(candle[1]),
-        high: parseFloat(candle[2]),
-        low: parseFloat(candle[3]),
-        close: parseFloat(candle[4]),
-      }));
+      if (aggregationMap[interval]) {
+        // Need to aggregate from smaller timeframe
+        const { base, factor } = aggregationMap[interval];
+        const maxLimit = marketType === 'spot' ? 1000 : 1500;
+        const endpoint = marketType === 'spot'
+          ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${base}&limit=${maxLimit * factor}`
+          : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${base}&limit=${maxLimit * factor}`;
+
+        const response = await fetch(endpoint);
+        const data = await response.json();
+
+        const baseData: CandleData[] = data.map((candle: any[]) => ({
+          time: Math.floor(candle[0] / 1000),
+          open: parseFloat(candle[1]),
+          high: parseFloat(candle[2]),
+          low: parseFloat(candle[3]),
+          close: parseFloat(candle[4]),
+        }));
+
+        // Aggregate candles
+        formattedData = aggregateCandles(baseData, factor);
+      } else {
+        // Fetch directly from Binance
+        const maxLimit = marketType === 'spot' ? 1000 : 1500;
+        const endpoint = marketType === 'spot'
+          ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`
+          : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`;
+
+        const response = await fetch(endpoint);
+        const data = await response.json();
+
+        formattedData = data.map((candle: any[]) => ({
+          time: Math.floor(candle[0] / 1000), // Convert to seconds
+          open: parseFloat(candle[1]),
+          high: parseFloat(candle[2]),
+          low: parseFloat(candle[3]),
+          close: parseFloat(candle[4]),
+        }));
+      }
 
       seriesRef.current.setData(formattedData);
 
@@ -192,6 +224,28 @@ export default function NewAdvancedChart() {
         title: level.type === 'support' ? 'Support' : 'Resistance',
       });
     });
+  };
+
+  // Aggregate candles from smaller timeframe
+  const aggregateCandles = (data: CandleData[], factor: number): CandleData[] => {
+    const aggregated: CandleData[] = [];
+
+    for (let i = 0; i < data.length; i += factor) {
+      const chunk = data.slice(i, i + factor);
+      if (chunk.length === 0) continue;
+
+      const aggregatedCandle: CandleData = {
+        time: chunk[0].time,
+        open: chunk[0].open,
+        high: Math.max(...chunk.map(c => c.high)),
+        low: Math.min(...chunk.map(c => c.low)),
+        close: chunk[chunk.length - 1].close,
+      };
+
+      aggregated.push(aggregatedCandle);
+    }
+
+    return aggregated;
   };
 
   // Pattern detection algorithms (simplified versions)
