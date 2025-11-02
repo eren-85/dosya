@@ -6,7 +6,7 @@
  * - P&L tracking, exposure breakdown
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Briefcase, TrendingUp, TrendingDown, Target, DollarSign, Plus, Trash2, Edit, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,40 +47,64 @@ interface PaperPosition {
   aiRecommendation: string;
 }
 
+const STORAGE_KEY = 'dosya_portfolio_holdings';
+
+// Default demo holdings (used only when localStorage is empty)
+const DEFAULT_HOLDINGS: Holding[] = [
+  {
+    id: '1',
+    symbol: 'BTC',
+    exchange: 'binance',
+    totalAmount: 0.5,
+    avgBuyPrice: 65000,
+    currentPrice: 67500,
+    marketType: 'spot',
+    transactions: [
+      { type: 'buy', price: 64000, amount: 0.3, date: '2025-10-15', total: 19200 },
+      { type: 'buy', price: 66500, amount: 0.2, date: '2025-10-20', total: 13300 },
+    ],
+  },
+  {
+    id: '2',
+    symbol: 'ETH',
+    exchange: 'binance',
+    totalAmount: 8,
+    avgBuyPrice: 3200,
+    currentPrice: 3350,
+    marketType: 'spot',
+    transactions: [
+      { type: 'buy', price: 3200, amount: 8, date: '2025-10-18', total: 25600 },
+    ],
+  },
+];
+
 export default function NewPortfolio() {
   const [activeTab, setActiveTab] = useState('real');
   const [marketType, setMarketType] = useState<MarketType>('spot');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
 
-  // Real Portfolio State
-  const [holdings, setHoldings] = useState<Holding[]>([
-    {
-      id: '1',
-      symbol: 'BTC',
-      exchange: 'binance',
-      totalAmount: 0.5,
-      avgBuyPrice: 65000,
-      currentPrice: 67500,
-      marketType: 'spot',
-      transactions: [
-        { type: 'buy', price: 64000, amount: 0.3, date: '2025-10-15', total: 19200 },
-        { type: 'buy', price: 66500, amount: 0.2, date: '2025-10-20', total: 13300 },
-      ],
-    },
-    {
-      id: '2',
-      symbol: 'ETH',
-      exchange: 'binance',
-      totalAmount: 8,
-      avgBuyPrice: 3200,
-      currentPrice: 3350,
-      marketType: 'spot',
-      transactions: [
-        { type: 'buy', price: 3200, amount: 8, date: '2025-10-18', total: 25600 },
-      ],
-    },
-  ]);
+  // Real Portfolio State - Load from localStorage on mount
+  const [holdings, setHoldings] = useState<Holding[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error('Failed to load portfolio from localStorage:', error);
+    }
+    return DEFAULT_HOLDINGS;
+  });
+
+  // Save holdings to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(holdings));
+    } catch (error) {
+      console.error('Failed to save portfolio to localStorage:', error);
+    }
+  }, [holdings]);
 
   // CRUD Handlers
   const handleAddHolding = (newHolding: Omit<Holding, 'id' | 'currentPrice'>) => {

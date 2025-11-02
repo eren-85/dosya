@@ -153,6 +153,11 @@ export default function NewAdvancedChart() {
         }));
       }
 
+      // Ensure we have valid data
+      if (!formattedData || formattedData.length === 0) {
+        throw new Error('No data received from API');
+      }
+
       seriesRef.current.setData(formattedData);
 
       // Add pattern indicators if enabled
@@ -164,10 +169,35 @@ export default function NewAdvancedChart() {
     } catch (error) {
       console.error('Error loading chart data:', error);
 
-      // Fallback: Generate mock data
-      const mockData = generateMockData(500);
-      seriesRef.current.setData(mockData);
-      chartRef.current?.timeScale().fitContent();
+      // Try to fetch at least basic data without patterns
+      try {
+        const fallbackEndpoint = marketType === 'spot'
+          ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=500`
+          : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=500`;
+
+        const fallbackResponse = await fetch(fallbackEndpoint);
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          const fallbackFormatted = fallbackData.map((candle: any[]) => ({
+            time: Math.floor(candle[0] / 1000),
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+          }));
+
+          if (fallbackFormatted.length > 0) {
+            seriesRef.current.setData(fallbackFormatted);
+            chartRef.current?.timeScale().fitContent();
+            return;
+          }
+        }
+      } catch (fallbackError) {
+        console.error('Fallback fetch also failed:', fallbackError);
+      }
+
+      // Last resort: show error message instead of mock data
+      alert(`Failed to load chart data for ${symbol}. Please check the symbol and try again.`);
     } finally {
       setLoading(false);
     }
@@ -522,31 +552,4 @@ export default function NewAdvancedChart() {
       )}
     </div>
   );
-}
-
-// Generate mock candle data for fallback
-function generateMockData(count: number): CandleData[] {
-  const data: CandleData[] = [];
-  const now = Math.floor(Date.now() / 1000);
-  let price = 65000;
-
-  for (let i = count; i > 0; i--) {
-    const change = (Math.random() - 0.5) * 1000;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) + Math.random() * 500;
-    const low = Math.min(open, close) - Math.random() * 500;
-
-    data.push({
-      time: now - i * 3600, // 1 hour intervals
-      open,
-      high,
-      low,
-      close,
-    });
-
-    price = close;
-  }
-
-  return data;
 }
