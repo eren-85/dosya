@@ -66,6 +66,7 @@ interface MarketIndices {
 }
 
 export default function NewDashboard() {
+  const { t } = useLanguage();
   const [selectedCoins, setSelectedCoins] = useState<string[]>(['BTCUSDT', 'ETHUSDT', 'BNBUSDT']);
   const [customSymbols, setCustomSymbols] = useState('');
   const [coinsData, setCoinsData] = useState<CoinData[]>([]);
@@ -218,9 +219,9 @@ export default function NewDashboard() {
       {/* Page Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t.dashboard.title}</h1>
           <p className="text-muted-foreground">
-            Multi-coin market intelligence with AI model outputs
+            {t.dashboard.subtitle}
           </p>
         </div>
         <MarketTypeSelector value={marketType} onChange={setMarketType} />
@@ -229,13 +230,13 @@ export default function NewDashboard() {
       {/* Coin Selector */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Select Coins to Track</CardTitle>
-          <CardDescription>Choose from quick select or enter custom symbols</CardDescription>
+          <CardTitle className="text-lg">{t.dashboard.selectCoins}</CardTitle>
+          <CardDescription>{t.dashboard.quickSelect} + {t.dashboard.customSymbols}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Quick Select */}
           <div>
-            <label className="text-sm font-medium mb-2 block">Quick Select</label>
+            <label className="text-sm font-medium mb-2 block">{t.dashboard.quickSelect}</label>
             <div className="flex flex-wrap gap-2">
               {COMMON_SYMBOLS.map((symbol) => (
                 <Badge
@@ -254,7 +255,7 @@ export default function NewDashboard() {
           {/* Custom Symbols */}
           <div>
             <label htmlFor="custom-symbols" className="text-sm font-medium mb-2 block">
-              Custom Symbols
+              {t.dashboard.customSymbols}
             </label>
             <div className="flex gap-2">
               <input
@@ -262,11 +263,11 @@ export default function NewDashboard() {
                 type="text"
                 value={customSymbols}
                 onChange={(e) => setCustomSymbols(e.target.value)}
-                placeholder="BTCUSDT,ETHUSDT,SOLUSDT"
+                placeholder={t.dashboard.customSymbolsPlaceholder}
                 className="flex-1 px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               <Button onClick={handleCustomSymbolsApply} variant="outline">
-                Apply
+                {t.common.add}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
