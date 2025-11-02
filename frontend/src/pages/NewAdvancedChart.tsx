@@ -122,6 +122,12 @@ export default function NewAdvancedChart() {
       }));
 
       seriesRef.current.setData(formattedData);
+
+      // Add pattern indicators if enabled
+      if (showPatterns && formattedData.length > 0) {
+        addPatternIndicators(formattedData);
+      }
+
       chartRef.current?.timeScale().fitContent();
     } catch (error) {
       console.error('Error loading chart data:', error);
@@ -133,6 +139,154 @@ export default function NewAdvancedChart() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const addPatternIndicators = (data: CandleData[]) => {
+    if (!seriesRef.current || !chartRef.current) return;
+
+    // Detect Order Blocks (simplified algorithm)
+    const orderBlocks = detectOrderBlocks(data);
+
+    // Detect Fair Value Gaps
+    const fvgAreas = detectFairValueGaps(data);
+
+    // Detect Liquidity Sweeps
+    const liquiditySweeps = detectLiquiditySweeps(data);
+
+    // Add markers for patterns
+    const markers: any[] = [];
+
+    // Order Block markers
+    orderBlocks.forEach((ob) => {
+      markers.push({
+        time: ob.time,
+        position: ob.type === 'bullish' ? 'belowBar' : 'aboveBar',
+        color: ob.type === 'bullish' ? '#22c55e' : '#ef4444',
+        shape: 'square',
+        text: 'OB',
+      });
+    });
+
+    // Liquidity Sweep markers
+    liquiditySweeps.forEach((ls) => {
+      markers.push({
+        time: ls.time,
+        position: ls.type === 'high' ? 'aboveBar' : 'belowBar',
+        color: '#eab308',
+        shape: 'arrowDown',
+        text: 'LS',
+      });
+    });
+
+    seriesRef.current.setMarkers(markers);
+
+    // Add price lines for support/resistance
+    const supportResistance = detectSupportResistance(data);
+    supportResistance.forEach((level) => {
+      seriesRef.current?.createPriceLine({
+        price: level.price,
+        color: level.type === 'support' ? '#22c55e' : '#ef4444',
+        lineWidth: 1,
+        lineStyle: 2, // Dashed
+        axisLabelVisible: true,
+        title: level.type === 'support' ? 'Support' : 'Resistance',
+      });
+    });
+  };
+
+  // Pattern detection algorithms (simplified versions)
+  const detectOrderBlocks = (data: CandleData[]) => {
+    const blocks: any[] = [];
+    for (let i = 5; i < data.length - 5; i++) {
+      const candle = data[i];
+      const prevCandles = data.slice(i - 5, i);
+      const nextCandles = data.slice(i + 1, i + 6);
+
+      // Bullish Order Block: Strong bearish candle followed by bullish movement
+      const isBearish = candle.close < candle.open;
+      const strongMove = Math.abs(candle.close - candle.open) > (candle.high - candle.low) * 0.7;
+      const bullishAfter = nextCandles.filter(c => c.close > c.open).length >= 3;
+
+      if (isBearish && strongMove && bullishAfter) {
+        blocks.push({ time: candle.time, type: 'bullish', price: candle.low });
+      }
+
+      // Bearish Order Block: Strong bullish candle followed by bearish movement
+      const isBullish = candle.close > candle.open;
+      const bearishAfter = nextCandles.filter(c => c.close < c.open).length >= 3;
+
+      if (isBullish && strongMove && bearishAfter) {
+        blocks.push({ time: candle.time, type: 'bearish', price: candle.high });
+      }
+    }
+    return blocks.slice(-10); // Return last 10 order blocks
+  };
+
+  const detectFairValueGaps = (data: CandleData[]) => {
+    const gaps: any[] = [];
+    for (let i = 1; i < data.length - 1; i++) {
+      const prev = data[i - 1];
+      const curr = data[i];
+      const next = data[i + 1];
+
+      // Bullish FVG: Gap between prev high and next low
+      if (prev.high < next.low) {
+        gaps.push({
+          time: curr.time,
+          type: 'bullish',
+          top: next.low,
+          bottom: prev.high,
+        });
+      }
+
+      // Bearish FVG: Gap between prev low and next high
+      if (prev.low > next.high) {
+        gaps.push({
+          time: curr.time,
+          type: 'bearish',
+          top: prev.low,
+          bottom: next.high,
+        });
+      }
+    }
+    return gaps.slice(-5); // Return last 5 FVGs
+  };
+
+  const detectLiquiditySweeps = (data: CandleData[]) => {
+    const sweeps: any[] = [];
+    for (let i = 20; i < data.length; i++) {
+      const curr = data[i];
+      const recent = data.slice(i - 20, i);
+      const recentHigh = Math.max(...recent.map(d => d.high));
+      const recentLow = Math.min(...recent.map(d => d.low));
+
+      // Sweep high (liquidity grab above)
+      if (curr.high > recentHigh && curr.close < curr.open) {
+        sweeps.push({ time: curr.time, type: 'high', price: curr.high });
+      }
+
+      // Sweep low (liquidity grab below)
+      if (curr.low < recentLow && curr.close > curr.open) {
+        sweeps.push({ time: curr.time, type: 'low', price: curr.low });
+      }
+    }
+    return sweeps.slice(-8); // Return last 8 sweeps
+  };
+
+  const detectSupportResistance = (data: CandleData[]) => {
+    const levels: any[] = [];
+    const prices = data.map(d => d.close);
+    const high = Math.max(...prices);
+    const low = Math.min(...prices);
+    const range = high - low;
+
+    // Add major support/resistance levels
+    levels.push({ price: high, type: 'resistance' });
+    levels.push({ price: low, type: 'support' });
+    levels.push({ price: low + range * 0.5, type: 'support' });
+    levels.push({ price: low + range * 0.618, type: 'resistance' }); // Fibonacci
+
+    return levels;
   };
 
   const handleFitContent = () => {
@@ -306,7 +460,8 @@ export default function NewAdvancedChart() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              Note: Pattern detection and Pine Script indicators will be rendered after backend integration
+              ✓ Pattern detection algorithms are active. Toggle patterns on/off using the button above.
+              Markers: OB (Order Blocks), LS (Liquidity Sweeps). Lines: Support/Resistance levels.
             </p>
           </CardContent>
         </Card>
