@@ -26,10 +26,18 @@ export default function NewDownload() {
   const [log, setLog] = useState('');
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
 
+  // Progress tracking
+  const [progress, setProgress] = useState(0);
+  const [currentInterval, setCurrentInterval] = useState('');
+  const [completedCount, setCompletedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
   const handleDownload = async () => {
     setLoading(true);
     setStatus('running');
     setLog('');
+    setProgress(0);
+    setCompletedCount(0);
     appendLog('⏳ Starting data download...\n');
 
     const symbolList = symbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
@@ -49,6 +57,8 @@ export default function NewDownload() {
       return;
     }
 
+    setTotalCount(intervalList.length);
+
     appendLog(`📊 Market Type: ${marketType.toUpperCase()}\n`);
     appendLog(`🏦 Exchange: Binance\n`);
     appendLog(`💱 Symbols: ${symbolList.join(', ')}\n`);
@@ -61,7 +71,9 @@ export default function NewDownload() {
 
     try {
       // Download data for each interval separately (backend expects single interval)
-      for (const interval of intervalList) {
+      for (let i = 0; i < intervalList.length; i++) {
+        const interval = intervalList[i];
+        setCurrentInterval(interval);
         appendLog(`\n📥 Downloading ${interval} data...\n`);
 
         try {
@@ -92,8 +104,13 @@ export default function NewDownload() {
           failedDownloads++;
         }
 
+        // Update progress
+        const completed = i + 1;
+        setCompletedCount(completed);
+        setProgress((completed / intervalList.length) * 100);
+
         // Small delay between requests
-        if (intervalList.indexOf(interval) < intervalList.length - 1) {
+        if (i < intervalList.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
@@ -254,6 +271,45 @@ export default function NewDownload() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Progress Bar */}
+      {loading && totalCount > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Download Progress</CardTitle>
+            <CardDescription>
+              Downloading {currentInterval || 'data'}... ({completedCount} of {totalCount} intervals)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Progress</span>
+                <span className="font-medium">{Math.round(progress)}%</span>
+              </div>
+              <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Current Status */}
+            <div className="flex items-center gap-2 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span>
+                {currentInterval ? (
+                  <>Downloading <span className="font-medium">{currentInterval}</span> interval...</>
+                ) : (
+                  'Preparing download...'
+                )}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status Alert */}
       {status === 'success' && (
