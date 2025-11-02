@@ -112,52 +112,28 @@ export default function NewAdvancedChart() {
     try {
       let formattedData: CandleData[];
 
-      // Check if interval needs aggregation
-      const aggregationMap: Record<string, { base: string; factor: number }> = {
-        '2h': { base: '1h', factor: 2 },
-        '6h': { base: '1h', factor: 6 },
-        '8h': { base: '1h', factor: 8 },
-        '12h': { base: '1h', factor: 12 },
-      };
+      console.log('[Chart] Loading data from backend...');
 
-      if (aggregationMap[interval]) {
-        // Need to aggregate from smaller timeframe
-        const { base, factor } = aggregationMap[interval];
-        const maxLimit = marketType === 'spot' ? 1000 : 1500;
-        const endpoint = marketType === 'spot'
-          ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${base}&limit=${maxLimit * factor}`
-          : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${base}&limit=${maxLimit * factor}`;
+      // Fetch ALL data from backend (Parquet files)
+      // Backend will prioritize: 1. Parquet files, 2. Binance API, 3. Mock data
+      const marketTypeParam = marketType === 'spot' ? 'spot' : 'futures';
+      const endpoint = `http://localhost:8000/api/data/ohlcv?symbol=${symbol}&timeframe=${interval}&market_type=${marketTypeParam}&limit=0`;
 
-        const response = await fetch(endpoint);
-        const data = await response.json();
+      const response = await fetch(endpoint);
+      const result = await response.json();
 
-        const baseData: CandleData[] = data.map((candle: any[]) => ({
-          time: Math.floor(candle[0] / 1000),
-          open: parseFloat(candle[1]),
-          high: parseFloat(candle[2]),
-          low: parseFloat(candle[3]),
-          close: parseFloat(candle[4]),
+      console.log('[Chart] Backend response:', result.source, result.count, 'candles');
+
+      if (result.status === 'success' && result.data && result.data.length > 0) {
+        formattedData = result.data.map((candle: any) => ({
+          time: candle.time,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
         }));
-
-        // Aggregate candles
-        formattedData = aggregateCandles(baseData, factor);
       } else {
-        // Fetch directly from Binance
-        const maxLimit = marketType === 'spot' ? 1000 : 1500;
-        const endpoint = marketType === 'spot'
-          ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`
-          : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${maxLimit}`;
-
-        const response = await fetch(endpoint);
-        const data = await response.json();
-
-        formattedData = data.map((candle: any[]) => ({
-          time: Math.floor(candle[0] / 1000), // Convert to seconds
-          open: parseFloat(candle[1]),
-          high: parseFloat(candle[2]),
-          low: parseFloat(candle[3]),
-          close: parseFloat(candle[4]),
-        }));
+        throw new Error('No data received from backend');
       }
 
       // Ensure we have valid data
@@ -177,37 +153,8 @@ export default function NewAdvancedChart() {
 
       chartRef.current?.timeScale().fitContent();
     } catch (error) {
-      console.error('Error loading chart data:', error);
-
-      // Try to fetch at least basic data without patterns
-      try {
-        const fallbackEndpoint = marketType === 'spot'
-          ? `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=500`
-          : `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=500`;
-
-        const fallbackResponse = await fetch(fallbackEndpoint);
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json();
-          const fallbackFormatted = fallbackData.map((candle: any[]) => ({
-            time: Math.floor(candle[0] / 1000),
-            open: parseFloat(candle[1]),
-            high: parseFloat(candle[2]),
-            low: parseFloat(candle[3]),
-            close: parseFloat(candle[4]),
-          }));
-
-          if (fallbackFormatted.length > 0) {
-            seriesRef.current.setData(fallbackFormatted);
-            chartRef.current?.timeScale().fitContent();
-            return;
-          }
-        }
-      } catch (fallbackError) {
-        console.error('Fallback fetch also failed:', fallbackError);
-      }
-
-      // Last resort: show error message instead of mock data
-      alert(`Failed to load chart data for ${symbol}. Please check the symbol and try again.`);
+      console.error('[Chart] Error loading chart data:', error);
+      alert(`Failed to load chart data for ${symbol}. Backend error: ${error}`);
     } finally {
       setLoading(false);
     }

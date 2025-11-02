@@ -232,13 +232,14 @@ async def get_ohlcv(
     """
 
     # Set a reasonable limit if 0 (all data)
+    actual_limit = limit
     if limit == 0:
-        limit = 2000  # Reasonable default for performance
+        actual_limit = 50000  # Return all data (up to 50k candles)
 
-    log.info(f"Requesting {symbol} {timeframe} {market_type} (limit={limit})")
+    log.info(f"Requesting {symbol} {timeframe} {market_type} (limit={actual_limit})")
 
     # Try to read from historical files first
-    candles = read_historical_data(symbol, timeframe, market_type, limit)
+    candles = read_historical_data(symbol, timeframe, market_type, actual_limit)
 
     if candles and len(candles) > 0:
         log.info(f"✅ Returning {len(candles)} candles from historical file")
@@ -254,7 +255,7 @@ async def get_ohlcv(
 
     # Try to fetch live data from Binance
     log.info(f"Historical file not found, trying Binance API...")
-    candles = fetch_binance_live_data(symbol, timeframe, market_type, min(limit, 1000))
+    candles = fetch_binance_live_data(symbol, timeframe, market_type, min(actual_limit, 1000))
 
     if candles and len(candles) > 0:
         log.info(f"✅ Returning {len(candles)} candles from Binance API")
@@ -270,7 +271,7 @@ async def get_ohlcv(
 
     # Generate mock data as fallback (ALWAYS works)
     log.warning(f"Both historical file and Binance API failed, using mock data")
-    candles = generate_mock_ohlcv(symbol, timeframe, min(limit, 500))
+    candles = generate_mock_ohlcv(symbol, timeframe, min(actual_limit, 500))
 
     log.info(f"✅ Returning {len(candles)} mock candles")
     return {
