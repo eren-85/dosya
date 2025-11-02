@@ -6,7 +6,7 @@
  * - Proper spacing and accessibility
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -23,10 +23,14 @@ import {
   Settings,
   User,
   Activity,
+  Languages,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
+import type { Language } from '@/lib/i18n';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,25 +38,52 @@ interface LayoutProps {
 
 interface MenuItem {
   path: string;
-  label: string;
+  labelKey: keyof typeof menuItemLabels;
   icon: React.ReactNode;
 }
 
+// Map menu items to translation keys
+const menuItemLabels = {
+  dashboard: 'dashboard',
+  downloadData: 'downloadData',
+  trainModels: 'trainModels',
+  aiAnalysis: 'aiAnalysis',
+  backtest: 'backtest',
+  advancedChart: 'advancedChart',
+  portfolio: 'portfolio',
+  pdfLearning: 'pdfLearning',
+} as const;
+
 const menuItems: MenuItem[] = [
-  { path: '/', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-  { path: '/download', label: 'Download Data', icon: <Download className="w-5 h-5" /> },
-  { path: '/training', label: 'Train Models', icon: <Brain className="w-5 h-5" /> },
-  { path: '/analysis', label: 'AI Analysis', icon: <Activity className="w-5 h-5" /> },
-  { path: '/backtest', label: 'Backtest', icon: <TrendingUp className="w-5 h-5" /> },
-  { path: '/advanced-chart', label: 'Advanced Chart', icon: <LineChart className="w-5 h-5" /> },
-  { path: '/portfolio', label: 'Portfolio', icon: <Briefcase className="w-5 h-5" /> },
-  { path: '/pdf-learning', label: 'PDF Learning', icon: <BookOpen className="w-5 h-5" /> },
+  { path: '/', labelKey: 'dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+  { path: '/download', labelKey: 'downloadData', icon: <Download className="w-5 h-5" /> },
+  { path: '/training', labelKey: 'trainModels', icon: <Brain className="w-5 h-5" /> },
+  { path: '/analysis', labelKey: 'aiAnalysis', icon: <Activity className="w-5 h-5" /> },
+  { path: '/backtest', labelKey: 'backtest', icon: <TrendingUp className="w-5 h-5" /> },
+  { path: '/advanced-chart', labelKey: 'advancedChart', icon: <LineChart className="w-5 h-5" /> },
+  { path: '/portfolio', labelKey: 'portfolio', icon: <Briefcase className="w-5 h-5" /> },
+  { path: '/pdf-learning', labelKey: 'pdfLearning', icon: <BookOpen className="w-5 h-5" /> },
 ];
 
 export default function NewLayout({ children }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { language, setLanguage, t } = useLanguage();
+
+  // Close settings dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setShowSettings(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="flex h-screen bg-background">
@@ -103,7 +134,7 @@ export default function NewLayout({ children }: LayoutProps) {
                 <span className={cn(isActive && 'text-primary-foreground')}>
                   {item.icon}
                 </span>
-                {!collapsed && <span>{item.label}</span>}
+                {!collapsed && <span>{t.nav[item.labelKey]}</span>}
               </button>
             );
           })}
@@ -126,7 +157,7 @@ export default function NewLayout({ children }: LayoutProps) {
           <div className="flex items-center gap-4">
             {/* Breadcrumb / Page Title */}
             <div className="text-sm text-muted-foreground">
-              {menuItems.find((item) => item.path === location.pathname)?.label || 'Dashboard'}
+              {t.nav[menuItems.find((item) => item.path === location.pathname)?.labelKey || 'dashboard']}
             </div>
           </div>
 
@@ -147,10 +178,70 @@ export default function NewLayout({ children }: LayoutProps) {
               <Bell className="w-4 h-4" />
             </Button>
 
-            {/* Settings */}
-            <Button variant="ghost" size="icon">
-              <Settings className="w-4 h-4" />
-            </Button>
+            {/* Settings Dropdown */}
+            <div className="relative" ref={settingsRef}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
+
+              {showSettings && (
+                <div className="absolute right-0 mt-2 w-56 rounded-lg border bg-card shadow-lg z-50">
+                  <div className="p-2">
+                    <div className="px-3 py-2 text-sm font-medium text-muted-foreground">
+                      {t.common.settings}
+                    </div>
+
+                    <div className="mt-1 space-y-1">
+                      {/* Language Selector */}
+                      <div className="px-3 py-2">
+                        <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                          <Languages className="w-4 h-4" />
+                          {t.common.language}
+                        </div>
+
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => {
+                              setLanguage('en');
+                              setShowSettings(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm transition-colors',
+                              language === 'en'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-accent hover:text-accent-foreground'
+                            )}
+                          >
+                            <span>English</span>
+                            {language === 'en' && <Check className="w-4 h-4" />}
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setLanguage('tr');
+                              setShowSettings(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm transition-colors',
+                              language === 'tr'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-accent hover:text-accent-foreground'
+                            )}
+                          >
+                            <span>Türkçe</span>
+                            {language === 'tr' && <Check className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* User Menu */}
             <Button variant="ghost" size="icon">
