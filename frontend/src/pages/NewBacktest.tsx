@@ -180,10 +180,18 @@ export default function NewBacktest() {
                 className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 disabled={loading}
               >
-                <option value="ppo">PPO Agent</option>
-                <option value="ensemble">Ensemble Models</option>
-                <option value="lstm">LSTM Predictor</option>
-                <option value="transformer">Transformer</option>
+                <optgroup label="AI/ML Models">
+                  <option value="ppo">PPO Agent (Reinforcement Learning)</option>
+                  <option value="ensemble">Ensemble Models</option>
+                  <option value="lstm">LSTM Predictor</option>
+                  <option value="transformer">Transformer Model</option>
+                </optgroup>
+                <optgroup label="Technical Indicator Strategies">
+                  <option value="ma_cross">Trend Following (MA Crossover)</option>
+                  <option value="mean_reversion">Mean Reversion (Bollinger Bands)</option>
+                  <option value="momentum">Momentum (RSI + MACD)</option>
+                  <option value="breakout">Breakout (Support/Resistance)</option>
+                </optgroup>
               </select>
             </div>
 
@@ -254,6 +262,57 @@ export default function NewBacktest() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Strategy Info */}
+      {!results && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Available Strategies</CardTitle>
+            <CardDescription>Choose from AI models or classic technical indicator strategies</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* AI/ML Strategies */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm">AI/ML Models</h3>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div>
+                    <span className="font-medium text-foreground">PPO Agent:</span> Deep reinforcement learning agent trained to maximize portfolio returns through continuous market interaction.
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Ensemble Models:</span> Combines multiple ML models (Random Forest, XGBoost, Neural Networks) for robust predictions.
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">LSTM:</span> Long Short-Term Memory network specialized in learning temporal patterns in price sequences.
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Transformer:</span> Attention-based architecture for capturing complex market relationships and dependencies.
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Strategies */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm">Technical Indicator Strategies</h3>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div>
+                    <span className="font-medium text-foreground">MA Crossover (Trend Following):</span> Trades based on fast EMA crossing slow EMA. Buy on golden cross, sell on death cross.
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Bollinger Bands (Mean Reversion):</span> Buys oversold conditions at lower band, sells overbought at upper band.
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">RSI + MACD (Momentum):</span> Combines RSI and MACD signals for high-probability momentum trades.
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Support/Resistance (Breakout):</span> Identifies key levels and trades breakouts with volume confirmation.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Results */}
       {results && (
