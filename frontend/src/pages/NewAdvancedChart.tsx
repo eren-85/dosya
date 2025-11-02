@@ -31,6 +31,7 @@ interface CandleData {
 
 export default function NewAdvancedChart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartCardRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
@@ -381,21 +382,42 @@ export default function NewAdvancedChart() {
     loadChartData();
   };
 
-  const handleFullscreen = () => {
-    const chartElement = chartContainerRef.current?.parentElement;
-    if (!chartElement) return;
+  const handleFullscreen = async () => {
+    const chartCard = chartCardRef.current;
+    if (!chartCard) return;
 
-    if (!isFullscreen) {
-      if (chartElement.requestFullscreen) {
-        chartElement.requestFullscreen();
+    try {
+      if (!document.fullscreenElement) {
+        await chartCard.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
       }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
+    } catch (err) {
+      console.error('Fullscreen error:', err);
     }
-    setIsFullscreen(!isFullscreen);
   };
+
+  // Listen for fullscreen changes (e.g., user presses ESC)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+
+      // Resize chart when entering/exiting fullscreen
+      if (chartRef.current) {
+        setTimeout(() => {
+          chartRef.current?.resize(
+            chartContainerRef.current?.clientWidth || 800,
+            document.fullscreenElement ? window.innerHeight - 100 : 500
+          );
+        }, 100);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -492,15 +514,17 @@ export default function NewAdvancedChart() {
       </Card>
 
       {/* Chart */}
-      <Card>
-        <CardContent className="p-0">
-          <div
-            ref={chartContainerRef}
-            className="w-full"
-            style={{ minHeight: '500px' }} // Guaranteed min-height
-          />
-        </CardContent>
-      </Card>
+      <div ref={chartCardRef}>
+        <Card>
+          <CardContent className="p-0">
+            <div
+              ref={chartContainerRef}
+              className="w-full"
+              style={{ minHeight: '500px' }} // Guaranteed min-height
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Pattern Legend */}
       {showPatterns && (
