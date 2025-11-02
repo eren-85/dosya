@@ -110,10 +110,28 @@ export default function NewAdvancedChart() {
   }, [symbol, interval, marketType, showEMA, showOrderBlocks, showFVG, showLiquiditySweeps]);
 
   const loadChartData = async () => {
-    if (!seriesRef.current) return;
+    if (!seriesRef.current || !chartRef.current) return;
 
     setLoading(true);
     try {
+      // Clear existing EMA series before reloading
+      if (emaSeriesRefs.current.ema21) {
+        chartRef.current.removeSeries(emaSeriesRefs.current.ema21);
+        emaSeriesRefs.current.ema21 = undefined;
+      }
+      if (emaSeriesRefs.current.ema50) {
+        chartRef.current.removeSeries(emaSeriesRefs.current.ema50);
+        emaSeriesRefs.current.ema50 = undefined;
+      }
+      if (emaSeriesRefs.current.ema100) {
+        chartRef.current.removeSeries(emaSeriesRefs.current.ema100);
+        emaSeriesRefs.current.ema100 = undefined;
+      }
+      if (emaSeriesRefs.current.ema200) {
+        chartRef.current.removeSeries(emaSeriesRefs.current.ema200);
+        emaSeriesRefs.current.ema200 = undefined;
+      }
+
       let formattedData: CandleData[];
 
       console.log('[Chart] Loading data from backend...');
@@ -201,14 +219,16 @@ export default function NewAdvancedChart() {
 
     // Fair Value Gap markers (if enabled)
     if (showFVG) {
-      fvgAreas.forEach((fvg) => {
-        markers.push({
+      fvgAreas.forEach((fvg, idx) => {
+        const marker = {
           time: fvg.time,
           position: fvg.type === 'bullish' ? 'belowBar' : 'aboveBar',
           color: fvg.type === 'bullish' ? '#3b82f6' : '#f97316',
-          shape: 'circle',
+          shape: 'arrowUp', // Changed from 'circle' to 'arrowUp' for better visibility
           text: 'FVG',
-        });
+        };
+        if (idx === 0) console.log('[Chart] FVG marker sample:', marker);
+        markers.push(marker);
       });
     }
 
