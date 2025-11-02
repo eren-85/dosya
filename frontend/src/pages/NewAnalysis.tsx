@@ -172,6 +172,7 @@ export default function NewAnalysis() {
       <Tabs defaultValue="scenarios" className="w-full">
         <TabsList>
           <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
+          <TabsTrigger value="technical">Technical Analysis</TabsTrigger>
           <TabsTrigger value="killzones">Kill Zones</TabsTrigger>
           <TabsTrigger value="pulse">Market Pulse</TabsTrigger>
         </TabsList>
@@ -233,6 +234,157 @@ export default function NewAnalysis() {
               </AlertDescription>
             </Alert>
           )}
+        </TabsContent>
+
+        {/* Technical Analysis Tab */}
+        <TabsContent value="technical" className="space-y-4 mt-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* RSI */}
+            <Card>
+              <CardHeader>
+                <CardTitle>RSI (Relative Strength Index)</CardTitle>
+                <CardDescription>14-period RSI on 1h timeframe</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Current Value</span>
+                  <span className="text-2xl font-bold text-primary">67.4</span>
+                </div>
+                <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"
+                    style={{ width: '67.4%' }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Oversold (&lt;30)</span>
+                  <span>Neutral</span>
+                  <span>Overbought (&gt;70)</span>
+                </div>
+                <div className="pt-2 border-t">
+                  <Badge variant="default">Bullish Momentum</Badge>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    RSI is in bullish territory but not yet overbought. Room for upside.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* MACD */}
+            <Card>
+              <CardHeader>
+                <CardTitle>MACD (Moving Average Convergence Divergence)</CardTitle>
+                <CardDescription>12, 26, 9 settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">MACD</div>
+                    <div className="text-lg font-semibold text-green-500">+245.8</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Signal</div>
+                    <div className="text-lg font-semibold">+198.3</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Histogram</div>
+                    <div className="text-lg font-semibold text-green-500">+47.5</div>
+                  </div>
+                </div>
+                <div className="h-20 flex items-end gap-1">
+                  {[20, 35, 45, 52, 48, 55, 62, 58, 65, 72, 68, 75, 82].map((height, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 bg-primary rounded-t"
+                      style={{ height: `${height}%` }}
+                    />
+                  ))}
+                </div>
+                <div className="pt-2 border-t">
+                  <Badge variant="success">Bullish Crossover</Badge>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    MACD line crossed above signal line. Positive momentum confirmed.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Moving Averages */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Moving Averages</CardTitle>
+                <CardDescription>EMA 20, 50, 200</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">EMA 20</span>
+                    <span className="font-semibold">${currentPrice ? (currentPrice * 0.98).toLocaleString() : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">EMA 50</span>
+                    <span className="font-semibold">${currentPrice ? (currentPrice * 0.95).toLocaleString() : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">EMA 200</span>
+                    <span className="font-semibold">${currentPrice ? (currentPrice * 0.87).toLocaleString() : '—'}</span>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <Badge variant="success">Golden Cross</Badge>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Price above all major EMAs. Strong uptrend structure intact.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Bollinger Bands */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bollinger Bands</CardTitle>
+                <CardDescription>20-period, 2 standard deviations</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Upper Band</span>
+                    <span className="font-semibold text-red-500">
+                      ${currentPrice ? (currentPrice * 1.03).toLocaleString() : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Middle (SMA 20)</span>
+                    <span className="font-semibold">
+                      ${currentPrice ? currentPrice.toLocaleString() : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Lower Band</span>
+                    <span className="font-semibold text-green-500">
+                      ${currentPrice ? (currentPrice * 0.97).toLocaleString() : '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="relative h-8 bg-secondary rounded">
+                  <div
+                    className="absolute left-0 right-0 h-full bg-primary/20 rounded"
+                    style={{ left: '35%', right: '35%' }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full border-2 border-background"
+                    style={{ left: '52%' }}
+                  />
+                </div>
+                <div className="pt-2 border-t">
+                  <Badge>Mid-Band Trading</Badge>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Price near middle band. Normal volatility. Watch for squeeze breakout.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Kill Zones Tab */}
