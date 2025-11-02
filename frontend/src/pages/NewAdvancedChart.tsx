@@ -230,6 +230,17 @@ export default function NewAdvancedChart() {
       });
     });
 
+    // Fair Value Gap markers (NEW)
+    fvgAreas.forEach((fvg) => {
+      markers.push({
+        time: fvg.time,
+        position: fvg.type === 'bullish' ? 'belowBar' : 'aboveBar',
+        color: fvg.type === 'bullish' ? '#3b82f6' : '#f97316',
+        shape: 'circle',
+        text: 'FVG',
+      });
+    });
+
     // Liquidity Sweep markers
     liquiditySweeps.forEach((ls) => {
       markers.push({
@@ -242,6 +253,29 @@ export default function NewAdvancedChart() {
     });
 
     seriesRef.current.setMarkers(markers);
+
+    // Add price lines for FVG zones
+    fvgAreas.forEach((fvg, idx) => {
+      // Top line of FVG zone
+      seriesRef.current?.createPriceLine({
+        price: fvg.top,
+        color: fvg.type === 'bullish' ? '#3b82f680' : '#f9731680',
+        lineWidth: 2,
+        lineStyle: 0, // Solid
+        axisLabelVisible: false,
+        title: `FVG ${fvg.type === 'bullish' ? '↑' : '↓'}`,
+      });
+
+      // Bottom line of FVG zone
+      seriesRef.current?.createPriceLine({
+        price: fvg.bottom,
+        color: fvg.type === 'bullish' ? '#3b82f680' : '#f9731680',
+        lineWidth: 2,
+        lineStyle: 0, // Solid
+        axisLabelVisible: false,
+        title: '',
+      });
+    });
 
     // Add price lines for support/resistance
     const supportResistance = detectSupportResistance(data);
@@ -530,47 +564,70 @@ export default function NewAdvancedChart() {
       {showPatterns && (
         <Card>
           <CardHeader>
-            <CardTitle>Pattern Legend & Indicators</CardTitle>
+            <CardTitle>Smart Money Concepts & Patterns</CardTitle>
+            <CardDescription>Active pattern detection and key price levels</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-sm">Order Blocks</span>
+            <div className="space-y-4">
+              {/* Pattern Markers */}
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Pattern Markers</h4>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <div className="w-4 h-4 rounded bg-green-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-sm font-medium">Order Blocks (OB)</div>
+                      <div className="text-xs text-muted-foreground">Institutional supply/demand zones</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <div className="w-4 h-4 rounded-full bg-blue-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-sm font-medium">Fair Value Gaps (FVG)</div>
+                      <div className="text-xs text-muted-foreground">Price imbalance zones with horizontal lines</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <div className="w-4 h-4 rounded-full bg-yellow-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-sm font-medium">Liquidity Sweeps (LS)</div>
+                      <div className="text-xs text-muted-foreground">Stop hunts and liquidity grabs</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-purple-500" />
-                <span className="text-sm">Fair Value Gaps</span>
+
+              {/* Price Levels */}
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Key Price Levels</h4>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 border-t-2 border-dashed border-green-500" />
+                    <span className="text-sm">Support (Green dashed)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 border-t-2 border-dashed border-red-500" />
+                    <span className="text-sm">Resistance (Red dashed)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 border-t-2 border-blue-400" />
+                    <span className="text-sm">FVG Zone (Blue/Orange solid)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 border-t-2 border-purple-400" />
+                    <span className="text-sm">Fibonacci Levels (Purple)</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                <span className="text-sm">Liquidity Sweeps</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-sm">Break of Structure</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-orange-500" />
-                <span className="text-sm">RSI Divergence</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-pink-500" />
-                <span className="text-sm">MACD Crossover</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-cyan-500" />
-                <span className="text-sm">EMA Cloud</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <span className="text-sm">Volume Profile</span>
+
+              <div className="pt-2 border-t">
+                <p className="text-xs text-muted-foreground">
+                  ✓ <span className="font-semibold">Showing last 10 Order Blocks, 5 FVG zones, and 8 Liquidity Sweeps</span>
+                  <br />
+                  💡 Toggle patterns on/off using the "Patterns" button above. Hover over markers for details.
+                </p>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              ✓ Pattern detection algorithms are active. Toggle patterns on/off using the button above.
-              Markers: OB (Order Blocks), LS (Liquidity Sweeps). Lines: Support/Resistance levels.
-            </p>
           </CardContent>
         </Card>
       )}

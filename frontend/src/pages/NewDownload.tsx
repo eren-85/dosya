@@ -274,34 +274,62 @@ export default function NewDownload() {
 
       {/* Progress Bar */}
       {loading && totalCount > 0 && (
-        <Card>
+        <Card className="border-primary/50">
           <CardHeader>
-            <CardTitle>Download Progress</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Download Progress</span>
+              <Badge variant="secondary" className="text-base">
+                {completedCount}/{totalCount}
+              </Badge>
+            </CardTitle>
             <CardDescription>
-              Downloading {currentInterval || 'data'}... ({completedCount} of {totalCount} intervals)
+              {currentInterval ? (
+                <>Downloading <span className="font-semibold">{currentInterval}</span> data from Binance...</>
+              ) : (
+                'Initializing download...'
+              )}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             {/* Progress Bar */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Progress</span>
-                <span className="font-medium">{Math.round(progress)}%</span>
+                <span className="text-muted-foreground font-medium">Overall Progress</span>
+                <span className="text-lg font-bold text-primary">{Math.round(progress)}%</span>
               </div>
-              <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
+              <div className="w-full h-4 bg-secondary rounded-full overflow-hidden border border-primary/20">
                 <div
-                  className="h-full bg-primary transition-all duration-300 ease-out"
+                  className="h-full bg-gradient-to-r from-primary to-pink-500 transition-all duration-500 ease-out relative"
                   style={{ width: `${progress}%` }}
-                />
+                >
+                  {/* Animated shimmer effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+                </div>
+              </div>
+              {/* Progress details */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                <span>
+                  {completedCount > 0 ? `✅ ${completedCount} completed` : 'Starting...'}
+                </span>
+                <span>
+                  {totalCount - completedCount > 0 ? `⏳ ${totalCount - completedCount} remaining` : 'Almost done!'}
+                </span>
               </div>
             </div>
 
             {/* Current Status */}
-            <div className="flex items-center gap-2 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span>
+            <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
+              <Loader2 className="w-5 h-5 animate-spin text-primary flex-shrink-0" />
+              <span className="text-sm">
                 {currentInterval ? (
-                  <>Downloading <span className="font-medium">{currentInterval}</span> interval...</>
+                  <>
+                    Processing <span className="font-bold text-primary">{currentInterval}</span> interval...
+                    {completedCount > 0 && (
+                      <span className="text-muted-foreground ml-2">
+                        ({completedCount} of {totalCount} intervals done)
+                      </span>
+                    )}
+                  </>
                 ) : (
                   'Preparing download...'
                 )}
