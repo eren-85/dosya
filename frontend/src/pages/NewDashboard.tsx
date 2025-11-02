@@ -81,7 +81,10 @@ export default function NewDashboard() {
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       setError(null);
+
+      console.log('[Dashboard] Starting data fetch...', { marketType, selectedCoins });
 
       // Fetch data for all selected coins
       const coinPromises = selectedCoins.map(async (symbol) => {
@@ -89,6 +92,8 @@ export default function NewDashboard() {
           const endpoint = marketType === 'spot'
             ? `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`
             : `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`;
+
+          console.log(`[Dashboard] Fetching ${symbol} from ${endpoint}`);
 
           const response = await fetch(endpoint);
           if (!response.ok) {
@@ -126,6 +131,8 @@ export default function NewDashboard() {
 
       const coins = (await Promise.all(coinPromises)).filter(c => c !== null) as CoinData[];
 
+      console.log('[Dashboard] Fetched coins:', coins.length);
+
       if (coins.length === 0) {
         setError('Unable to fetch coin data. Please check your internet connection.');
         setLoading(false);
@@ -135,29 +142,18 @@ export default function NewDashboard() {
       setCoinsData(coins);
 
       // Fetch BTC Dominance - use mock data if API fails
-      try {
-        // BTC.D data from alternative source or calculate from market caps
-        setMarketIndices({
-          btcDominance: 56.8,
-          btcDominanceChange: -0.5,
-          totalMarketCap: 2.45e12,
-          totalMarketCapChange: 2.3,
-          total3: 1.12e12,
-          total3Change: 3.1,
-        });
-      } catch (err) {
-        console.warn('Using mock market indices data');
-        setMarketIndices({
-          btcDominance: 56.8,
-          btcDominanceChange: -0.5,
-          totalMarketCap: 2.45e12,
-          totalMarketCapChange: 2.3,
-          total3: 1.12e12,
-          total3Change: 3.1,
-        });
-      }
+      console.log('[Dashboard] Setting market indices...');
+      setMarketIndices({
+        btcDominance: 56.8,
+        btcDominanceChange: -0.5,
+        totalMarketCap: 2.45e12,
+        totalMarketCapChange: 2.3,
+        total3: 1.12e12,
+        total3Change: 3.1,
+      });
 
       // Add mock Market Health and Liquidity data
+      console.log('[Dashboard] Setting analysis...');
       setAnalysis({
         market_health: {
           fear_greed: 68,
@@ -173,10 +169,11 @@ export default function NewDashboard() {
         },
       });
 
+      console.log('[Dashboard] Data fetch complete!');
       setLoading(false);
     } catch (err: any) {
-      console.error('Error fetching data:', err);
-      setError(err.message);
+      console.error('[Dashboard] Error fetching data:', err);
+      setError(err?.message || 'Unknown error occurred');
       setLoading(false);
     }
   };
