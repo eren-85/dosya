@@ -99,7 +99,7 @@ export default function NewPDFLearning() {
     setTimeout(() => {
       const aiMessage: ChatMessage = {
         role: 'assistant',
-        content: `Based on the uploaded PDFs, I can provide insights about "${question}". This is a demo response. In production, this would use RAG (Retrieval-Augmented Generation) to search through your PDF documents and provide accurate answers with citations.`,
+        content: `⚠️ **Backend RAG sistemi henüz aktif değil.**\n\nSorunuz: "${question}"\n\nBu özellik şu anda demo modunda çalışıyor. Gerçek üretim ortamında:\n- PDF'leriniz vector database'e yüklenecek\n- AI, PDF içeriğinde arama yapacak\n- Kaynaklarla birlikte detaylı cevaplar verecek\n\nBackend entegrasyonu için: \`backend.learning.pdf_rag\` modülünü kullanın.`,
         timestamp: new Date().toISOString(),
       };
       setMessages(prev => [...prev, aiMessage]);

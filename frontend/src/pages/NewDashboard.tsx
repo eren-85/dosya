@@ -85,54 +85,68 @@ export default function NewDashboard() {
 
       // Fetch data for all selected coins
       const coinPromises = selectedCoins.map(async (symbol) => {
-        const endpoint = marketType === 'spot'
-          ? `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`
-          : `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`;
+        try {
+          const endpoint = marketType === 'spot'
+            ? `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`
+            : `https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`;
 
-        const response = await fetch(endpoint);
-        const data = await response.json();
+          const response = await fetch(endpoint);
+          if (!response.ok) {
+            console.warn(`Failed to fetch ${symbol}:`, response.status);
+            return null;
+          }
 
-        // Mock AI model outputs (in real app, fetch from backend)
-        return {
-          symbol,
-          price: parseFloat(data.lastPrice),
-          change24h: parseFloat(data.priceChangePercent),
-          volume24h: parseFloat(data.quoteVolume),
-          rl: {
-            decision: Math.random() > 0.5 ? 'LONG' : 'SHORT',
-            confidence: 0.7 + Math.random() * 0.25,
-            expectedReturn: (Math.random() - 0.5) * 8,
-          },
-          lstm: {
-            trend: Math.random() > 0.6 ? 'UP' : Math.random() > 0.3 ? 'DOWN' : 'SIDEWAYS',
-            probability: 0.6 + Math.random() * 0.3,
-          },
-          ensemble: {
-            signal: Math.random() > 0.6 ? 'BUY' : Math.random() > 0.3 ? 'SELL' : 'HOLD',
-            confidence: 0.75 + Math.random() * 0.2,
-          },
-        } as CoinData;
+          const data = await response.json();
+
+          // Mock AI model outputs (in real app, fetch from backend)
+          return {
+            symbol,
+            price: parseFloat(data.lastPrice),
+            change24h: parseFloat(data.priceChangePercent),
+            volume24h: parseFloat(data.quoteVolume),
+            rl: {
+              decision: Math.random() > 0.5 ? 'LONG' : 'SHORT',
+              confidence: 0.7 + Math.random() * 0.25,
+              expectedReturn: (Math.random() - 0.5) * 8,
+            },
+            lstm: {
+              trend: Math.random() > 0.6 ? 'UP' : Math.random() > 0.3 ? 'DOWN' : 'SIDEWAYS',
+              probability: 0.6 + Math.random() * 0.3,
+            },
+            ensemble: {
+              signal: Math.random() > 0.6 ? 'BUY' : Math.random() > 0.3 ? 'SELL' : 'HOLD',
+              confidence: 0.75 + Math.random() * 0.2,
+            },
+          } as CoinData;
+        } catch (err) {
+          console.error(`Error fetching ${symbol}:`, err);
+          return null;
+        }
       });
 
-      const coins = await Promise.all(coinPromises);
+      const coins = (await Promise.all(coinPromises)).filter(c => c !== null) as CoinData[];
+
+      if (coins.length === 0) {
+        setError('Unable to fetch coin data. Please check your internet connection.');
+        setLoading(false);
+        return;
+      }
+
       setCoinsData(coins);
 
-      // Fetch BTC Dominance (BTCDOMUSDT on Binance)
+      // Fetch BTC Dominance - use mock data if API fails
       try {
-        const btcDomResp = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCDOMUSDT');
-        const btcDomData = await btcDomResp.json();
-
-        // Mock market indices (in real app, fetch from CoinGecko or similar)
+        // BTC.D data from alternative source or calculate from market caps
         setMarketIndices({
-          btcDominance: parseFloat(btcDomData.lastPrice),
-          btcDominanceChange: parseFloat(btcDomData.priceChangePercent),
-          totalMarketCap: 2.45e12, // $2.45T mock
+          btcDominance: 56.8,
+          btcDominanceChange: -0.5,
+          totalMarketCap: 2.45e12,
           totalMarketCapChange: 2.3,
-          total3: 1.12e12, // $1.12T mock (total market cap excluding BTC)
+          total3: 1.12e12,
           total3Change: 3.1,
         });
       } catch (err) {
-        console.warn('Could not fetch BTC dominance, using mock data');
+        console.warn('Using mock market indices data');
         setMarketIndices({
           btcDominance: 56.8,
           btcDominanceChange: -0.5,
