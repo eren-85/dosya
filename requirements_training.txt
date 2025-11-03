@@ -1,0 +1,43 @@
+# Crypto Trading Bot - Training Dependencies
+# For Windows + RTX 4060
+
+# Core ML/RL
+stable-baselines3[extra]==2.3.2
+gymnasium==1.0.0
+
+# Ensemble Models
+xgboost==2.0.3
+lightgbm==4.3.0
+catboost==1.2.5
+
+# Deep Learning (PyTorch installed separately via CUDA)
+# Install with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Data Processing
+pandas==2.2.2
+numpy==1.26.4
+pyarrow==16.1.0
+
+# Technical Analysis
+ta-lib==0.4.28  # Optional: binary wheels at https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib
+
+# API
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+
+# Utilities
+scikit-learn==1.5.1
+matplotlib==3.9.1
+tqdm==4.66.5
+
+# PDF Processing (if using locally)
+PyMuPDF==1.24.5
+pypdf2==3.0.1
+paddleocr==2.7.3
+paddlepaddle==2.6.1
+
+# Optional: Vision Models (for chart analysis)
+# transformers==4.44.0
+# accelerate==0.33.0
+# bitsandbytes==0.43.3

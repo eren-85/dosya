@@ -359,3 +359,77 @@ def _get_mock_on_chain_data(symbol: str) -> Dict[str, Any]:
         },
     }
 
+
+# ============================================
+# REAL DECISION ENGINE ENDPOINT
+# ============================================
+
+@router.get("/decision")
+async def get_trading_decision(symbol: str = "BTCUSDT", timeframe: str = "1d"):
+    """
+    Get real trading decision from Decision Engine
+
+    Uses:
+    - Trained PPO agent
+    - XGBoost/LightGBM/CatBoost ensemble
+    - LSTM trend prediction
+    - Technical analysis
+
+    Args:
+        symbol: Trading pair (BTCUSDT, ETHUSDT, etc.)
+        timeframe: Timeframe (1d, 4h, 1h)
+
+    Returns:
+        {
+            "status": "success",
+            "symbol": "BTCUSDT",
+            "timeframe": "1d",
+            "decision": {
+                "action": "LONG" | "SHORT" | "WAIT",
+                "confidence": 0.85,
+                "entry": 68500,
+                "stop_loss": 67000,
+                "take_profit": 72000,
+                "position_size": 0.42,
+                "reasoning": "Ensemble: +2.5%, RSI oversold, MACD bullish"
+            },
+            "timestamp": "2025-11-03T12:00:00Z"
+        }
+    """
+    logger.info(f"📊 Decision request: {symbol} {timeframe}")
+
+    try:
+        # Import Decision Engine
+        from backend.models.decision_engine import DecisionEngine
+
+        # Create engine (loads models automatically)
+        engine = DecisionEngine()
+
+        # Get decision
+        decision = engine.decide(symbol=symbol, timeframe=timeframe)
+
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "decision": decision,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+    except FileNotFoundError as e:
+        # Models not trained yet
+        logger.warning(f"⚠️  Models not found: {e}")
+
+        return {
+            "status": "error",
+            "error": "models_not_trained",
+            "message": "Train models first: run train_ensemble_quick.py, quick_train_ppo.py, train_lstm_quick.py",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Decision engine error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
