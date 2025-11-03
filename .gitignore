@@ -107,3 +107,7 @@ temp/
 *.key
 *.crt
 secrets/
+
+# Knowledge base charts (too large)
+backend/data/knowledge/charts/
+backend/data/prepared/
