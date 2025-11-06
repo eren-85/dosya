@@ -35,6 +35,7 @@ import requests
 import time
 import logging
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -515,6 +516,8 @@ if __name__ == "__main__":
     parser.add_argument('--include-liquidations', action='store_true', help='Include liquidations')
     parser.add_argument('--no-orderbook', action='store_true', help='Skip Order Book')
     parser.add_argument('--no-sessions', action='store_true', help='Skip ICT sessions')
+    parser.add_argument('--parallel', action='store_true', help='Enable parallel download (faster)')
+    parser.add_argument('--max-workers', type=int, default=3, help='Max parallel workers (default: 3)')
 
     args = parser.parse_args()
 
@@ -529,12 +532,14 @@ if __name__ == "__main__":
     logger.info(f"   Timeframe: {args.timeframe}")
     logger.info(f"   Exchanges: {', '.join(exchanges_list)}")
     logger.info(f"   Date range: {args.start_date} → {args.end_date or 'today'}")
+    logger.info(f"   Parallel: {'✅ Enabled (' + str(args.max_workers) + ' workers)' if args.parallel else '❌ Disabled (sequential)'}")
     logger.info(f"{'='*60}\n")
 
-    # Process each symbol
-    for idx, symbol in enumerate(symbols_list, 1):
+    # Worker function for parallel processing
+    def process_symbol(symbol: str, idx: int, total: int):
+        """Process single symbol (runs in thread)"""
         logger.info(f"\n{'='*60}")
-        logger.info(f"📊 [{idx}/{len(symbols_list)}] Processing {symbol}")
+        logger.info(f"📊 [{idx}/{total}] Processing {symbol}")
         logger.info(f"{'='*60}\n")
 
         try:
@@ -557,12 +562,51 @@ if __name__ == "__main__":
             logger.info(f"   Columns: {len(df.columns)}")
             logger.info(f"   File: {output_path}")
 
+            return {"symbol": symbol, "status": "success", "rows": len(df), "path": output_path}
+
         except Exception as e:
             logger.error(f"\n❌ {symbol} failed: {e}")
             import traceback
             traceback.print_exc()
-            continue
+            return {"symbol": symbol, "status": "failed", "error": str(e)}
 
+    # Process symbols
+    results = []
+
+    if args.parallel and len(symbols_list) > 1:
+        # Parallel processing
+        logger.info(f"🔥 Starting parallel download with {args.max_workers} workers...\n")
+
+        with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+            # Submit all tasks
+            futures = {
+                executor.submit(process_symbol, symbol, idx+1, len(symbols_list)): symbol
+                for idx, symbol in enumerate(symbols_list)
+            }
+
+            # Wait for completion
+            for future in as_completed(futures):
+                result = future.result()
+                results.append(result)
+    else:
+        # Sequential processing
+        logger.info(f"🐌 Sequential download (use --parallel for faster processing)...\n")
+
+        for idx, symbol in enumerate(symbols_list):
+            result = process_symbol(symbol, idx+1, len(symbols_list))
+            results.append(result)
+
+    # Summary
     logger.info(f"\n{'='*60}")
     logger.info(f"✅ All downloads complete!")
+    logger.info(f"{'='*60}")
+
+    success_count = sum(1 for r in results if r['status'] == 'success')
+    failed_count = len(results) - success_count
+
+    logger.info(f"   Success: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.info(f"   Failed: {failed_count}")
+        logger.info(f"   Failed symbols: {', '.join([r['symbol'] for r in results if r['status'] == 'failed'])}")
+
     logger.info(f"{'='*60}\n")

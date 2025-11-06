@@ -311,6 +311,11 @@ def download_advanced(req: AdvancedDownloadReq):
     if not req.include_sessions:
         args.append("--no-sessions")
 
+    # Enable parallel download (3 workers by default)
+    # Symbols will be downloaded concurrently for faster processing
+    args.append("--parallel")
+    args.extend(["--max-workers", "3"])
+
     # Use longer timeout for advanced collection (45 minutes)
     # Multi-exchange + advanced features can take longer
     return _run(args, timeout=2700)
