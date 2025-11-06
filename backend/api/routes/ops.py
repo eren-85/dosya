@@ -23,6 +23,22 @@ class DownloadReq(BaseModel):
     parquet: bool = True  # Default to Parquet (CSV is deprecated)
 
 
+class AdvancedDownloadReq(BaseModel):
+    symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT", "ETHUSDT"]])
+    timeframe: str = Field(..., examples=["1h"])
+    exchanges: List[str] = Field(["binance", "bybit"], examples=[["binance", "bybit"]])
+    start_date: str = Field(..., examples=["2024-01-01"])
+    end_date: Optional[str] = None  # None = today
+    # Feature toggles
+    include_volatility: bool = True  # ATR, Parkinson, Rogers-Satchell
+    include_cvd: bool = True  # Cumulative Volume Delta
+    include_oi: bool = True  # Open Interest per exchange
+    include_funding: bool = True  # Funding Rate per exchange
+    include_liquidations: bool = False  # Liquidations (if available)
+    include_orderbook: bool = True  # Order Book snapshots
+    include_sessions: bool = True  # ICT kill-zones
+
+
 class SyncReq(BaseModel):
     symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT", "ETHUSDT"]])
     interval: str = Field(..., examples=["4h"])
@@ -249,3 +265,52 @@ def backtest(req: BacktestReq):
         "results": results,
         "note": "Mock backtest results (deterministic). Real backtest engine will be implemented."
     }
+
+
+@router.post("/download-advanced")
+def download_advanced(req: AdvancedDownloadReq):
+    """
+    Download advanced multi-exchange data with comprehensive features.
+
+    Uses backend/data/advanced_collector.py to fetch:
+    - OHLCV with aggregation
+    - Volatility (ATR, Parkinson, Rogers-Satchell)
+    - CVD (Cumulative Volume Delta)
+    - Open Interest per exchange
+    - Funding Rate per exchange
+    - Liquidations (if available)
+    - Order Book snapshots
+    - ICT kill-zones (session labels)
+
+    Returns parquet files in data/advanced/
+    """
+    args = [
+        "python", "-m", "backend.data.advanced_collector",
+        "--symbols", ",".join(req.symbols),
+        "--timeframe", req.timeframe,
+        "--exchanges", ",".join(req.exchanges),
+        "--start-date", req.start_date,
+    ]
+
+    if req.end_date:
+        args.extend(["--end-date", req.end_date])
+
+    # Feature flags (pass as CLI arguments)
+    if not req.include_volatility:
+        args.append("--no-volatility")
+    if not req.include_cvd:
+        args.append("--no-cvd")
+    if not req.include_oi:
+        args.append("--no-oi")
+    if not req.include_funding:
+        args.append("--no-funding")
+    if req.include_liquidations:
+        args.append("--include-liquidations")
+    if not req.include_orderbook:
+        args.append("--no-orderbook")
+    if not req.include_sessions:
+        args.append("--no-sessions")
+
+    # Use longer timeout for advanced collection (45 minutes)
+    # Multi-exchange + advanced features can take longer
+    return _run(args, timeout=2700)

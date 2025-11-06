@@ -34,7 +34,137 @@ export default function NewDownload() {
   const [completedCount, setCompletedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Advanced download mode
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [selectedExchanges, setSelectedExchanges] = useState<string[]>(['binance', 'bybit']);
+  const [startDate, setStartDate] = useState('2024-01-01');
+  const [endDate, setEndDate] = useState('');
+  const [includeVolatility, setIncludeVolatility] = useState(true);
+  const [includeCvd, setIncludeCvd] = useState(true);
+  const [includeOi, setIncludeOi] = useState(true);
+  const [includeFunding, setIncludeFunding] = useState(true);
+  const [includeLiquidations, setIncludeLiquidations] = useState(false);
+  const [includeOrderbook, setIncludeOrderbook] = useState(true);
+  const [includeSessions, setIncludeSessions] = useState(true);
+
+  const handleAdvancedDownload = async () => {
+    setLoading(true);
+    setStatus('running');
+    setLog('');
+    setProgress(0);
+    setCompletedCount(0);
+    appendLog('⏳ Starting advanced multi-exchange download...\n');
+
+    const symbolList = symbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+    const intervalList = intervals.split(',').map(i => i.trim()).filter(i => i);
+
+    if (symbolList.length === 0) {
+      appendLog('❌ Error: No symbols provided');
+      setStatus('error');
+      setLoading(false);
+      return;
+    }
+
+    if (intervalList.length === 0) {
+      appendLog('❌ Error: No intervals provided');
+      setStatus('error');
+      setLoading(false);
+      return;
+    }
+
+    setTotalCount(intervalList.length);
+
+    appendLog(`🌐 Multi-Exchange Mode\n`);
+    appendLog(`🏦 Exchanges: ${selectedExchanges.join(', ')}\n`);
+    appendLog(`💱 Symbols: ${symbolList.join(', ')}\n`);
+    appendLog(`⏱️  Intervals: ${intervalList.join(', ')}\n`);
+    appendLog(`📅 Date range: ${startDate} → ${endDate || 'today'}\n\n`);
+
+    // Features
+    const features: string[] = [];
+    if (includeVolatility) features.push('Volatility');
+    if (includeCvd) features.push('CVD');
+    if (includeOi) features.push('Open Interest');
+    if (includeFunding) features.push('Funding Rate');
+    if (includeLiquidations) features.push('Liquidations');
+    if (includeOrderbook) features.push('Order Book');
+    if (includeSessions) features.push('ICT Sessions');
+    appendLog(`📊 Features: ${features.join(', ')}\n\n`);
+
+    let allSuccess = true;
+    let totalDownloads = 0;
+    let failedDownloads = 0;
+
+    try {
+      for (let i = 0; i < intervalList.length; i++) {
+        const interval = intervalList[i];
+        setCurrentInterval(interval);
+        appendLog(`\n📥 Downloading ${interval} advanced data...\n`);
+
+        try {
+          const result = await api.downloadAdvancedData({
+            symbols: symbolList,
+            timeframe: interval,
+            exchanges: selectedExchanges,
+            start_date: startDate,
+            end_date: endDate || undefined,
+            include_volatility: includeVolatility,
+            include_cvd: includeCvd,
+            include_oi: includeOi,
+            include_funding: includeFunding,
+            include_liquidations: includeLiquidations,
+            include_orderbook: includeOrderbook,
+            include_sessions: includeSessions,
+          });
+
+          if (result.ok) {
+            appendLog(`✅ ${interval} advanced download completed!\n`);
+            if (result.stdout) {
+              appendLog(`${result.stdout}\n`);
+            }
+            totalDownloads++;
+          } else {
+            appendLog(`❌ ${interval} download failed (code: ${result.returncode})\n`);
+            if (result.stderr) {
+              appendLog(`${result.stderr}\n`);
+            }
+            allSuccess = false;
+            failedDownloads++;
+          }
+        } catch (intervalError: any) {
+          appendLog(`❌ ${interval} error: ${intervalError.message}\n`);
+          allSuccess = false;
+          failedDownloads++;
+        }
+
+        const completed = i + 1;
+        setCompletedCount(completed);
+        setProgress((completed / intervalList.length) * 100);
+
+        if (i < intervalList.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      appendLog(`\n${'='.repeat(50)}\n`);
+      appendLog(`✅ Completed: ${totalDownloads}/${intervalList.length} intervals\n`);
+      if (failedDownloads > 0) {
+        appendLog(`❌ Failed: ${failedDownloads} intervals\n`);
+      }
+      setStatus(allSuccess ? 'success' : 'error');
+    } catch (error: any) {
+      appendLog(`\n❌ Critical error: ${error.message}\n`);
+      setStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownload = async () => {
+    if (advancedMode) {
+      return handleAdvancedDownload();
+    }
+
     setLoading(true);
     setStatus('running');
     setLog('');
@@ -231,19 +361,130 @@ export default function NewDownload() {
           </div>
 
           {/* All-time Option */}
-          <div className="flex items-center gap-3">
-            <input
-              id="all-time"
-              type="checkbox"
-              checked={allTime}
-              onChange={(e) => setAllTime(e.target.checked)}
-              className="w-4 h-4 rounded border-input"
-              disabled={loading}
-            />
-            <label htmlFor="all-time" className="text-sm font-medium cursor-pointer">
-              {t.download.allTime}
-            </label>
+          {!advancedMode && (
+            <div className="flex items-center gap-3">
+              <input
+                id="all-time"
+                type="checkbox"
+                checked={allTime}
+                onChange={(e) => setAllTime(e.target.checked)}
+                className="w-4 h-4 rounded border-input"
+                disabled={loading}
+              />
+              <label htmlFor="all-time" className="text-sm font-medium cursor-pointer">
+                {t.download.allTime}
+              </label>
+            </div>
+          )}
+
+          {/* Advanced Mode Toggle */}
+          <div className="pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div>
+                <label htmlFor="advanced-mode" className="text-sm font-medium cursor-pointer">
+                  🚀 Advanced Multi-Exchange Mode
+                </label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Multi-exchange data with volatility, CVD, OI, funding, order book, and ICT sessions
+                </p>
+              </div>
+              <input
+                id="advanced-mode"
+                type="checkbox"
+                checked={advancedMode}
+                onChange={(e) => setAdvancedMode(e.target.checked)}
+                className="w-4 h-4 rounded border-input"
+                disabled={loading}
+              />
+            </div>
           </div>
+
+          {/* Advanced Options */}
+          {advancedMode && (
+            <div className="space-y-4 p-4 bg-secondary/50 rounded-lg border">
+              {/* Date Range */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="start-date" className="text-sm font-medium mb-2 block">
+                    Start Date
+                  </label>
+                  <input
+                    id="start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="end-date" className="text-sm font-medium mb-2 block">
+                    End Date (optional)
+                  </label>
+                  <input
+                    id="end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              {/* Exchange Selection */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Exchanges</label>
+                <div className="flex gap-3">
+                  {['binance', 'bybit'].map((exchange) => (
+                    <label key={exchange} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedExchanges.includes(exchange)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedExchanges([...selectedExchanges, exchange]);
+                          } else {
+                            setSelectedExchanges(selectedExchanges.filter(ex => ex !== exchange));
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-input"
+                        disabled={loading}
+                      />
+                      <span className="text-sm capitalize">{exchange}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Feature Toggles */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Features</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'volatility', label: 'Volatility (ATR, Parkinson, RS)', state: includeVolatility, setter: setIncludeVolatility },
+                    { key: 'cvd', label: 'CVD (Cumulative Volume Delta)', state: includeCvd, setter: setIncludeCvd },
+                    { key: 'oi', label: 'Open Interest', state: includeOi, setter: setIncludeOi },
+                    { key: 'funding', label: 'Funding Rate', state: includeFunding, setter: setIncludeFunding },
+                    { key: 'orderbook', label: 'Order Book Snapshot', state: includeOrderbook, setter: setIncludeOrderbook },
+                    { key: 'sessions', label: 'ICT Kill-Zones', state: includeSessions, setter: setIncludeSessions },
+                    { key: 'liquidations', label: 'Liquidations (experimental)', state: includeLiquidations, setter: setIncludeLiquidations },
+                  ].map(({ key, label, state, setter }) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={state}
+                        onChange={(e) => setter(e.target.checked)}
+                        className="w-4 h-4 rounded border-input"
+                        disabled={loading}
+                      />
+                      <span className={state ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">

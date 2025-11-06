@@ -200,6 +200,42 @@ export const api = {
     return response.json();
   },
 
+  // Download advanced multi-exchange data
+  async downloadAdvancedData(params: {
+    symbols: string[];
+    timeframe: string;
+    exchanges: string[];
+    start_date: string;
+    end_date?: string;
+    include_volatility?: boolean;
+    include_cvd?: boolean;
+    include_oi?: boolean;
+    include_funding?: boolean;
+    include_liquidations?: boolean;
+    include_orderbook?: boolean;
+    include_sessions?: boolean;
+  }): Promise<any> {
+    const response = await fetchWithRetry(`${API_BASE_URL}/api/ops/download-advanced`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbols: params.symbols,
+        timeframe: params.timeframe,
+        exchanges: params.exchanges,
+        start_date: params.start_date,
+        end_date: params.end_date,
+        include_volatility: params.include_volatility ?? true,
+        include_cvd: params.include_cvd ?? true,
+        include_oi: params.include_oi ?? true,
+        include_funding: params.include_funding ?? true,
+        include_liquidations: params.include_liquidations ?? false,
+        include_orderbook: params.include_orderbook ?? true,
+        include_sessions: params.include_sessions ?? true,
+      }),
+    });
+    return response.json();
+  },
+
   // Backtest
   async runBacktest(params: {
     symbols: string[];

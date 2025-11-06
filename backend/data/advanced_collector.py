@@ -497,30 +497,72 @@ class AdvancedDataCollector:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--symbol', type=str, default='BTCUSDT')
+    parser = argparse.ArgumentParser(description='Advanced Multi-Exchange Data Collector')
+    parser.add_argument('--symbols', type=str, default='BTCUSDT',
+                        help='Comma-separated symbols (e.g., BTCUSDT,ETHUSDT)')
     parser.add_argument('--timeframe', type=str, default='1h')
-    parser.add_argument('--market', type=str, default='futures')
+    parser.add_argument('--exchanges', type=str, default='binance,bybit',
+                        help='Comma-separated exchanges (e.g., binance,bybit)')
     parser.add_argument('--start-date', type=str, default='2024-01-01')
     parser.add_argument('--end-date', type=str, default=None)
-    parser.add_argument('--output', type=str, default=None)
+    parser.add_argument('--output-dir', type=str, default='data/advanced')
+
+    # Feature toggles (not implemented yet but for future use)
+    parser.add_argument('--no-volatility', action='store_true', help='Skip volatility features')
+    parser.add_argument('--no-cvd', action='store_true', help='Skip CVD features')
+    parser.add_argument('--no-oi', action='store_true', help='Skip Open Interest')
+    parser.add_argument('--no-funding', action='store_true', help='Skip Funding Rate')
+    parser.add_argument('--include-liquidations', action='store_true', help='Include liquidations')
+    parser.add_argument('--no-orderbook', action='store_true', help='Skip Order Book')
+    parser.add_argument('--no-sessions', action='store_true', help='Skip ICT sessions')
+
     args = parser.parse_args()
 
-    collector = AdvancedDataCollector(
-        symbol=args.symbol,
-        timeframe=args.timeframe,
-        market=args.market
-    )
+    # Parse symbols and exchanges
+    symbols_list = [s.strip().upper() for s in args.symbols.split(',')]
+    exchanges_list = [e.strip().lower() for e in args.exchanges.split(',')]
 
-    output_path = args.output or f"data/advanced/{args.symbol}_{args.timeframe}_{args.market}_advanced.parquet"
+    logger.info(f"\n{'='*60}")
+    logger.info(f"🚀 Advanced Data Collection Starting")
+    logger.info(f"{'='*60}")
+    logger.info(f"   Symbols: {', '.join(symbols_list)}")
+    logger.info(f"   Timeframe: {args.timeframe}")
+    logger.info(f"   Exchanges: {', '.join(exchanges_list)}")
+    logger.info(f"   Date range: {args.start_date} → {args.end_date or 'today'}")
+    logger.info(f"{'='*60}\n")
 
-    df = collector.collect_all(
-        start_date=args.start_date,
-        end_date=args.end_date,
-        output_path=output_path
-    )
+    # Process each symbol
+    for idx, symbol in enumerate(symbols_list, 1):
+        logger.info(f"\n{'='*60}")
+        logger.info(f"📊 [{idx}/{len(symbols_list)}] Processing {symbol}")
+        logger.info(f"{'='*60}\n")
 
-    print(f"\n📊 Final DataFrame:")
-    print(df.info())
-    print(f"\n📈 Sample:")
-    print(df.head())
+        try:
+            collector = AdvancedDataCollector(
+                symbol=symbol,
+                timeframe=args.timeframe,
+                exchanges=exchanges_list
+            )
+
+            output_path = f"{args.output_dir}/{symbol}_{args.timeframe}_multi.parquet"
+
+            df = collector.collect_all(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                output_path=output_path
+            )
+
+            logger.info(f"\n✅ {symbol} complete!")
+            logger.info(f"   Rows: {len(df):,}")
+            logger.info(f"   Columns: {len(df.columns)}")
+            logger.info(f"   File: {output_path}")
+
+        except Exception as e:
+            logger.error(f"\n❌ {symbol} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"✅ All downloads complete!")
+    logger.info(f"{'='*60}\n")

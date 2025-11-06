@@ -150,19 +150,40 @@ class TrainingCallback(BaseCallback):
 
 
 def train_ppo(
-    data_path: str = "/home/user/dosya/backend/data/prepared/BTCUSDT_1d_futures_prepared.parquet",
+    symbol: str = "BTCUSDT",
+    timeframe: str = "1d",
+    market_type: str = "futures",
     total_timesteps: int = 50000,
-    save_path: str = "/home/user/dosya/backend/models/saved/ppo_btcusdt_1d.zip"
+    save_dir: str = "/home/user/dosya/backend/models/saved",
+    use_advanced: bool = True
 ):
-    """Train PPO agent"""
+    """
+    Train PPO agent
+
+    Args:
+        symbol: Trading symbol
+        timeframe: Candle timeframe
+        market_type: 'spot' or 'futures'
+        total_timesteps: Number of training timesteps
+        save_dir: Directory to save model
+        use_advanced: Use advanced multi-exchange features if available
+    """
 
     logger.info(f"🤖 Starting PPO Training")
-    logger.info(f"   Data: {data_path}")
+    logger.info(f"   Symbol: {symbol} {timeframe} {market_type}")
     logger.info(f"   Timesteps: {total_timesteps}")
+    logger.info(f"   Advanced mode: {use_advanced}")
 
-    # Load data
-    df = pd.read_parquet(data_path)
-    logger.info(f"   Loaded {len(df)} candles with {len(df.columns)} columns")
+    # Load and prepare data (will auto-detect advanced data)
+    from backend.training.prepare_rl_data import prepare_training_data
+
+    df = prepare_training_data(
+        symbol=symbol,
+        timeframe=timeframe,
+        market_type=market_type,
+        use_advanced=use_advanced
+    )
+    logger.info(f"   Loaded {len(df)} candles with {len(df.columns)} features")
 
     # Create environment
     env = DummyVecEnv([lambda: SimpleTradingEnv(df)])
@@ -189,8 +210,9 @@ def train_ppo(
     model.learn(total_timesteps=total_timesteps, callback=callback)
 
     # Save model
-    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    model.save(save_path)
+    save_path = Path(save_dir) / f"ppo_{symbol.lower()}_{timeframe}.zip"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save(str(save_path))
 
     logger.info(f"\n✅ Training complete!")
     logger.info(f"   Model saved: {save_path}")
@@ -199,6 +221,20 @@ def train_ppo(
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Train PPO Agent')
+    parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
+    parser.add_argument('--timeframe', type=str, default='1d', help='Candle timeframe')
+    parser.add_argument('--market', type=str, default='futures', help='spot or futures')
+    parser.add_argument('--timesteps', type=int, default=50000, help='Training timesteps')
+    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features')
+    args = parser.parse_args()
+
     model = train_ppo(
-        total_timesteps=50000,  # Fast training for testing
+        symbol=args.symbol,
+        timeframe=args.timeframe,
+        market_type=args.market,
+        total_timesteps=args.timesteps,
+        use_advanced=not args.no_advanced
     )

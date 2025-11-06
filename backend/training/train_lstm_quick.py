@@ -86,27 +86,51 @@ def create_sequences(data, seq_length=60):
 
 
 def train_lstm(
-    data_path: str = "/home/user/dosya/backend/data/prepared/BTCUSDT_1d_futures_prepared.parquet",
+    symbol: str = "BTCUSDT",
+    timeframe: str = "1d",
+    market_type: str = "futures",
     seq_length: int = 60,
     epochs: int = 50,
     batch_size: int = 32,
     learning_rate: float = 0.001,
-    save_path: str = "/home/user/dosya/backend/models/saved/lstm_btcusdt_1d.pth"
+    save_dir: str = "/home/user/dosya/backend/models/saved",
+    use_advanced: bool = True
 ):
-    """Train LSTM model"""
+    """
+    Train LSTM model for price prediction
+
+    Args:
+        symbol: Trading symbol
+        timeframe: Candle timeframe
+        market_type: 'spot' or 'futures'
+        seq_length: Sequence length for LSTM
+        epochs: Number of training epochs
+        batch_size: Training batch size
+        learning_rate: Learning rate
+        save_dir: Directory to save model
+        use_advanced: Use advanced multi-exchange features if available
+    """
 
     logger.info("🧠 Starting LSTM Training")
-    logger.info(f"   Data: {data_path}")
+    logger.info(f"   Symbol: {symbol} {timeframe} {market_type}")
     logger.info(f"   Sequence length: {seq_length}")
     logger.info(f"   Epochs: {epochs}")
+    logger.info(f"   Advanced mode: {use_advanced}")
 
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"   Device: {device}")
 
-    # Load data
-    df = pd.read_parquet(data_path)
-    logger.info(f"   Loaded {len(df)} candles")
+    # Load and prepare data (will auto-detect advanced data)
+    from backend.training.prepare_rl_data import prepare_training_data
+
+    df = prepare_training_data(
+        symbol=symbol,
+        timeframe=timeframe,
+        market_type=market_type,
+        use_advanced=use_advanced
+    )
+    logger.info(f"   Loaded {len(df)} candles with {len(df.columns)} features")
 
     # Features
     feature_cols = [col for col in df.columns if col not in [
@@ -217,7 +241,8 @@ def train_lstm(
         # Save best model
         if test_loss < best_test_loss:
             best_test_loss = test_loss
-            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+            save_path = Path(save_dir) / f"lstm_{symbol.lower()}_{timeframe}.pth"
+            save_path.parent.mkdir(parents=True, exist_ok=True)
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'scaler': scaler,
@@ -234,14 +259,22 @@ def train_lstm(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Train LSTM Model')
+    parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
+    parser.add_argument('--timeframe', type=str, default='1d', help='Candle timeframe')
+    parser.add_argument('--market', type=str, default='futures', help='spot or futures')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
     parser.add_argument('--seq-length', type=int, default=60, help='Sequence length')
+    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features')
     args = parser.parse_args()
 
     model = train_lstm(
+        symbol=args.symbol,
+        timeframe=args.timeframe,
+        market_type=args.market,
         epochs=args.epochs,
         batch_size=args.batch_size,
-        seq_length=args.seq_length
+        seq_length=args.seq_length,
+        use_advanced=not args.no_advanced
     )

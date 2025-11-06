@@ -141,11 +141,73 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_advanced_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add derived features from advanced data (multi-exchange)
+
+    Features:
+    - Funding spread (Binance vs Bybit)
+    - OI divergence (Binance vs Bybit)
+    - Consensus signals (average across exchanges)
+    - CVD momentum
+    - Volatility ratios
+
+    Args:
+        df: DataFrame with advanced columns
+
+    Returns:
+        DataFrame with derived features
+    """
+    logger.info("Adding advanced derived features...")
+
+    # Funding spread (if both exchanges have funding data)
+    if 'funding_rate_binance' in df.columns and 'funding_rate_bybit' in df.columns:
+        df['funding_spread'] = df['funding_rate_binance'] - df['funding_rate_bybit']
+        df['funding_avg'] = (df['funding_rate_binance'] + df['funding_rate_bybit']) / 2
+        logger.info("   ✅ Funding spread & average")
+
+    # OI divergence
+    if 'oi_binance' in df.columns and 'oi_bybit' in df.columns:
+        df['oi_ratio'] = df['oi_binance'] / (df['oi_bybit'] + 1e-8)  # Avoid div by zero
+        df['oi_divergence'] = (df['oi_binance'] - df['oi_bybit']) / (df['oi_binance'] + df['oi_bybit'] + 1e-8)
+        logger.info("   ✅ OI divergence & ratio")
+
+    # Order Book consensus (if both exchanges have OB data)
+    if 'ob_imbalance' in df.columns and 'ob_imbalance_bybit' in df.columns:
+        df['ob_consensus'] = (df['ob_imbalance'] + df['ob_imbalance_bybit']) / 2
+        df['ob_divergence'] = df['ob_imbalance'] - df['ob_imbalance_bybit']
+        logger.info("   ✅ Order Book consensus & divergence")
+
+    # CVD momentum (if CVD exists)
+    if 'cvd' in df.columns:
+        df['cvd_change'] = df['cvd'].diff()
+        df['cvd_momentum'] = df['cvd'].rolling(window=14).mean()
+        df['cvd_acceleration'] = df['cvd_change'].rolling(window=7).mean()
+        logger.info("   ✅ CVD momentum & acceleration")
+
+    # Volatility features (if advanced volatility exists)
+    if 'vol_parkinson' in df.columns and 'vol_rs' in df.columns:
+        df['vol_avg'] = (df['vol_parkinson'] + df['vol_rs']) / 2
+        df['vol_ratio'] = df['vol_parkinson'] / (df['vol_rs'] + 1e-8)
+        logger.info("   ✅ Volatility average & ratio")
+
+    # ICT session one-hot encoding (if exists)
+    if 'session_label' in df.columns:
+        session_dummies = pd.get_dummies(df['session_label'], prefix='session')
+        df = pd.concat([df, session_dummies], axis=1)
+        logger.info(f"   ✅ Session one-hot: {list(session_dummies.columns)}")
+
+    logger.info(f"✅ Advanced features added. Total columns: {len(df.columns)}")
+
+    return df
+
+
 def prepare_training_data(
     symbol: str = "BTCUSDT",
     timeframe: str = "1d",
     market_type: str = "futures",
-    data_dir: str = "/home/user/dosya/data/historical"
+    data_dir: str = "/home/user/dosya/data/historical",
+    use_advanced: bool = True
 ) -> pd.DataFrame:
     """
     Load historical data and prepare for RL training
@@ -155,24 +217,34 @@ def prepare_training_data(
         timeframe: Candle timeframe
         market_type: 'spot' or 'futures'
         data_dir: Data directory path
+        use_advanced: Try to load advanced multi-exchange data first
 
     Returns:
-        DataFrame with OHLCV + indicators
+        DataFrame with OHLCV + indicators + advanced features
     """
     logger.info(f"📊 Preparing training data for {symbol} {timeframe} {market_type}")
 
-    # Try Parquet first
-    parquet_file = Path(data_dir) / f"{symbol}_{timeframe}_{market_type}.parquet"
-    csv_file = Path(data_dir) / f"{symbol}_{timeframe}_{market_type}.csv"
-
-    if parquet_file.exists():
-        logger.info(f"Loading from Parquet: {parquet_file}")
-        df = pd.read_parquet(parquet_file)
-    elif csv_file.exists():
-        logger.info(f"Loading from CSV: {csv_file}")
-        df = pd.read_csv(csv_file)
+    # Priority 1: Advanced multi-exchange data (if enabled)
+    advanced_file = Path("/home/user/dosya/data/advanced") / f"{symbol}_{timeframe}_multi.parquet"
+    if use_advanced and advanced_file.exists():
+        logger.info(f"🚀 Loading ADVANCED data: {advanced_file}")
+        df = pd.read_parquet(advanced_file)
+        is_advanced = True
     else:
-        raise FileNotFoundError(f"No data file found for {symbol} {timeframe} {market_type}")
+        # Priority 2: Basic historical data
+        parquet_file = Path(data_dir) / f"{symbol}_{timeframe}_{market_type}.parquet"
+        csv_file = Path(data_dir) / f"{symbol}_{timeframe}_{market_type}.csv"
+
+        if parquet_file.exists():
+            logger.info(f"Loading from Parquet: {parquet_file}")
+            df = pd.read_parquet(parquet_file)
+            is_advanced = False
+        elif csv_file.exists():
+            logger.info(f"Loading from CSV: {csv_file}")
+            df = pd.read_csv(csv_file)
+            is_advanced = False
+        else:
+            raise FileNotFoundError(f"No data file found for {symbol} {timeframe} {market_type}")
 
     # Ensure required columns
     required_columns = ['open', 'high', 'low', 'close', 'volume']
@@ -185,12 +257,25 @@ def prepare_training_data(
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
     # Convert timestamp if exists
-    if 'timestamp' in df.columns:
+    if 'open_time' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['open_time'])
+        df = df.set_index('timestamp')
+    elif 'timestamp' in df.columns:
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df = df.set_index('timestamp')
 
-    # Add technical indicators
-    df = add_technical_indicators(df)
+    # Add technical indicators (if not already present)
+    if 'ema_21' not in df.columns:
+        df = add_technical_indicators(df)
+    else:
+        logger.info("Technical indicators already present, skipping...")
+
+    # Add advanced derived features (if using advanced data)
+    if is_advanced:
+        df = add_advanced_features(df)
+        logger.info("✅ Using ADVANCED multi-exchange features for training")
+    else:
+        logger.info("ℹ️  Using basic OHLCV + technical indicators")
 
     logger.info(f"✅ Training data prepared: {len(df)} candles with {len(df.columns)} features")
 
@@ -198,23 +283,53 @@ def prepare_training_data(
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Prepare RL training data')
+    parser.add_argument('--symbol', type=str, default='BTCUSDT')
+    parser.add_argument('--timeframe', type=str, default='1d')
+    parser.add_argument('--market', type=str, default='futures')
+    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features')
+    args = parser.parse_args()
+
     # Test data preparation
     df = prepare_training_data(
-        symbol="BTCUSDT",
-        timeframe="1d",
-        market_type="futures"
+        symbol=args.symbol,
+        timeframe=args.timeframe,
+        market_type=args.market,
+        use_advanced=not args.no_advanced
     )
 
     print(f"\n📊 Data Summary:")
     print(f"   Shape: {df.shape}")
-    print(f"   Columns: {list(df.columns)}")
+    print(f"   Columns: {len(df.columns)}")
     print(f"   Date range: {df.index[0]} to {df.index[-1]}")
 
-    print(f"\n📈 Feature Statistics:")
-    print(df[['close', 'ema_21', 'ema_200', 'rsi', 'macd', 'atr']].describe())
+    # Show all columns organized by category
+    print(f"\n📋 Feature Categories:")
+    basic_cols = ['open', 'high', 'low', 'close', 'volume']
+    ta_cols = [c for c in df.columns if c in ['ema_21', 'ema_50', 'ema_200', 'rsi', 'macd', 'atr', 'bb_upper', 'bb_lower']]
+    advanced_cols = [c for c in df.columns if any(x in c for x in ['funding', 'oi_', 'cvd', 'ob_', 'vol_parkinson', 'session'])]
+
+    print(f"   Basic OHLCV: {len(basic_cols)} → {basic_cols}")
+    print(f"   Technical Indicators: {len(ta_cols)} → {ta_cols}")
+    print(f"   Advanced Features: {len(advanced_cols)}")
+
+    print(f"\n📈 Key Feature Statistics:")
+    display_cols = ['close', 'ema_21', 'ema_200', 'rsi', 'macd', 'atr']
+    # Add advanced features if present
+    if 'cvd' in df.columns:
+        display_cols.append('cvd')
+    if 'funding_spread' in df.columns:
+        display_cols.append('funding_spread')
+    if 'oi_divergence' in df.columns:
+        display_cols.append('oi_divergence')
+
+    print(df[display_cols].describe())
 
     # Save prepared data
-    output_file = "/home/user/dosya/backend/data/prepared/BTCUSDT_1d_futures_prepared.parquet"
+    suffix = 'advanced' if 'cvd' in df.columns or 'funding_spread' in df.columns else 'prepared'
+    output_file = f"/home/user/dosya/backend/data/prepared/{args.symbol}_{args.timeframe}_{args.market}_{suffix}.parquet"
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_file)
     print(f"\n💾 Prepared data saved: {output_file}")

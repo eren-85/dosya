@@ -163,17 +163,37 @@ def train_catboost(X_train, y_train, X_test, y_test):
 
 
 def train_ensemble(
-    data_path: str = "/home/user/dosya/backend/data/prepared/BTCUSDT_1d_futures_prepared.parquet",
-    save_dir: str = "/home/user/dosya/backend/models/saved"
+    symbol: str = "BTCUSDT",
+    timeframe: str = "1d",
+    market_type: str = "futures",
+    save_dir: str = "/home/user/dosya/backend/models/saved",
+    use_advanced: bool = True
 ):
-    """Train ensemble of models"""
+    """
+    Train ensemble of models (XGBoost + LightGBM + CatBoost)
+
+    Args:
+        symbol: Trading symbol
+        timeframe: Candle timeframe
+        market_type: 'spot' or 'futures'
+        save_dir: Directory to save trained models
+        use_advanced: Use advanced multi-exchange features if available
+    """
 
     logger.info("🤖 Starting Ensemble Training")
-    logger.info(f"   Data: {data_path}")
+    logger.info(f"   Symbol: {symbol} {timeframe} {market_type}")
+    logger.info(f"   Advanced mode: {use_advanced}")
 
-    # Load data
-    df = pd.read_parquet(data_path)
-    logger.info(f"   Loaded {len(df)} candles")
+    # Load and prepare data (will auto-detect advanced data)
+    from backend.training.prepare_rl_data import prepare_training_data
+
+    df = prepare_training_data(
+        symbol=symbol,
+        timeframe=timeframe,
+        market_type=market_type,
+        use_advanced=use_advanced
+    )
+    logger.info(f"   Loaded {len(df)} candles with {len(df.columns)} features")
 
     # Prepare prediction data
     X, y = prepare_prediction_data(df, prediction_horizon=1)
@@ -232,19 +252,19 @@ def train_ensemble(
     save_path.mkdir(parents=True, exist_ok=True)
 
     for name, model in models.items():
-        model_file = save_path / f"{name}_btcusdt_1d.pkl"
+        model_file = save_path / f"{name}_{symbol.lower()}_{timeframe}.pkl"
         with open(model_file, 'wb') as f:
             pickle.dump(model, f)
         logger.info(f"   Saved: {model_file}")
 
     # Save weights
-    weights_file = save_path / "ensemble_weights.pkl"
+    weights_file = save_path / f"ensemble_weights_{symbol.lower()}_{timeframe}.pkl"
     with open(weights_file, 'wb') as f:
         pickle.dump(weights, f)
     logger.info(f"   Saved: {weights_file}")
 
     # Save feature names
-    features_file = save_path / "feature_names.pkl"
+    features_file = save_path / f"feature_names_{symbol.lower()}_{timeframe}.pkl"
     with open(features_file, 'wb') as f:
         pickle.dump(list(X.columns), f)
     logger.info(f"   Saved: {features_file}")
@@ -255,4 +275,18 @@ def train_ensemble(
 
 
 if __name__ == "__main__":
-    models, weights = train_ensemble()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Train Ensemble Models')
+    parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
+    parser.add_argument('--timeframe', type=str, default='1d', help='Candle timeframe')
+    parser.add_argument('--market', type=str, default='futures', help='spot or futures')
+    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features')
+    args = parser.parse_args()
+
+    models, weights = train_ensemble(
+        symbol=args.symbol,
+        timeframe=args.timeframe,
+        market_type=args.market,
+        use_advanced=not args.no_advanced
+    )
