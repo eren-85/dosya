@@ -20,11 +20,19 @@ WORKDIR /app
 
 # Install Python dependencies
 COPY requirements.txt .
+COPY requirements_training.txt .
+
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install -r requirements_training.txt
+
+# Install PyTorch with CUDA support (for GPU training)
+# Note: Remove this line if training only on CPU
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Copy application code
 COPY backend /app/backend
+COPY scripts /app/scripts
 
 # Create data directories (volumes will mount here)
 RUN mkdir -p /app/data/historical /app/data/models /app/data/knowledge \

@@ -37,9 +37,12 @@ services:
     working_dir: /app
     environment:
       - PYTHONPATH=/app
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
     volumes:
       - ./backend:/app/backend
       - ./data:/app/data
+      - ./backend/models:/app/backend/models  # Trained models persist
     depends_on:
       - postgres
       - redis
@@ -47,6 +50,14 @@ services:
       - sigma_network
     ports:
       - "8000:8000"
+    # GPU support (requires nvidia-docker2)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery_worker:
