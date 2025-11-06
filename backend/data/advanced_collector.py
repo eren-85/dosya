@@ -39,6 +39,13 @@ import argparse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import Bybit API helper (import after path setup)
+try:
+    from backend.data.bybit_api import BybitAPI
+except ImportError:
+    logger.warning("⚠️  BybitAPI not found, multi-exchange disabled")
+    BybitAPI = None
+
 
 class AdvancedDataCollector:
     """
@@ -57,12 +64,12 @@ class AdvancedDataCollector:
 
     BINANCE_BASE = "https://fapi.binance.com"
     BYBIT_BASE = "https://api.bybit.com"
-    OKX_BASE = "https://www.okx.com"
 
-    def __init__(self, symbol: str, timeframe: str, market: str = 'futures'):
+    def __init__(self, symbol: str, timeframe: str, market: str = 'futures', exchanges: List[str] = None):
         self.symbol = symbol
         self.timeframe = timeframe
         self.market = market
+        self.exchanges = exchanges or ['binance', 'bybit']  # Default: Binance + Bybit
 
         # Timeframe mapping
         self.tf_map = {
@@ -70,7 +77,14 @@ class AdvancedDataCollector:
             '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
         }
 
+        # Bybit timeframe mapping
+        self.bybit_tf_map = {
+            '1m': '1', '5m': '5', '15m': '15', '30m': '30',
+            '1h': '60', '4h': '240', '1d': 'D', '1w': 'W'
+        }
+
         logger.info(f"📊 Collector initialized: {symbol} {timeframe} {market}")
+        logger.info(f"   Exchanges: {', '.join(self.exchanges)}")
 
     # ============================================
     # 1. OHLCV (Binance primary)
@@ -412,16 +426,27 @@ class AdvancedDataCollector:
 
         # 4. Open Interest
         logger.info("   🔓 Fetching Open Interest...")
+
+        # Binance OI
         oi_df = self.fetch_open_interest_binance(start_ts, end_ts)
         if not oi_df.empty:
             df = df.merge(oi_df, left_on='open_time', right_on='timestamp', how='left')
-            logger.info(f"   ✅ OI: {oi_df['oi_binance'].notna().sum()} records")
+            logger.info(f"   ✅ OI Binance: {oi_df['oi_binance'].notna().sum()} records")
+
+        # Bybit OI
+        if 'bybit' in self.exchanges and BybitAPI:
+            bybit_api = BybitAPI(self.symbol, self.timeframe)
+            oi_bybit_df = bybit_api.fetch_open_interest(start_ts, end_ts)
+            if not oi_bybit_df.empty:
+                df = df.merge(oi_bybit_df, left_on='open_time', right_on='timestamp', how='left', suffixes=('', '_bybit'))
+                logger.info(f"   ✅ OI Bybit: {oi_bybit_df['oi_bybit'].notna().sum()} records")
 
         # 5. Funding Rate
         logger.info("   💰 Fetching Funding Rate...")
+
+        # Binance Funding
         funding_df = self.fetch_funding_rate_binance(start_ts, end_ts)
         if not funding_df.empty:
-            # Merge asof (funding happens every 8h)
             df = pd.merge_asof(
                 df.sort_values('open_time'),
                 funding_df.sort_values('funding_ts'),
@@ -429,7 +454,22 @@ class AdvancedDataCollector:
                 right_on='funding_ts',
                 direction='backward'
             )
-            logger.info(f"   ✅ Funding: {funding_df['funding_rate_binance'].notna().sum()} records")
+            logger.info(f"   ✅ Funding Binance: {funding_df['funding_rate_binance'].notna().sum()} records")
+
+        # Bybit Funding
+        if 'bybit' in self.exchanges and BybitAPI:
+            bybit_api = BybitAPI(self.symbol, self.timeframe)
+            funding_bybit_df = bybit_api.fetch_funding_rate(start_ts, end_ts)
+            if not funding_bybit_df.empty:
+                df = pd.merge_asof(
+                    df.sort_values('open_time'),
+                    funding_bybit_df.sort_values('funding_ts'),
+                    left_on='open_time',
+                    right_on='funding_ts',
+                    direction='backward',
+                    suffixes=('', '_bybit')
+                )
+                logger.info(f"   ✅ Funding Bybit: {funding_bybit_df['funding_rate_bybit'].notna().sum()} records")
 
         # 6. ICT Sessions
         logger.info("   ⏰ Adding ICT sessions...")
