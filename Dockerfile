@@ -7,28 +7,38 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+# Install system dependencies (including TA-Lib build requirements)
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     git \
     libpq-dev \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Install TA-Lib C library (required for ta-lib Python package)
+RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzf ta-lib-0.4.0-src.tar.gz && \
+    cd ta-lib/ && \
+    ./configure --prefix=/usr && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
 
 # Set working directory
 WORKDIR /app
 
-# Install Python dependencies
-COPY requirements.txt .
-COPY requirements_training.txt .
-
+# STEP 1: Install PyTorch with CUDA FIRST (before requirements.txt)
+# This prevents version conflicts with requirements.txt
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    pip install -r requirements_training.txt
+    pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 
-# Install PyTorch with CUDA support (for GPU training)
-# Note: Remove this line if training only on CPU
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# STEP 2: Install other Python dependencies
+# PyTorch lines in requirements.txt will be skipped (already installed)
+COPY requirements.txt .
+
+RUN pip install -r requirements.txt
 
 # Copy application code
 COPY backend /app/backend
