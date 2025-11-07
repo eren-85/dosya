@@ -36,6 +36,7 @@ import time
 import logging
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -109,10 +110,22 @@ class AdvancedDataCollector:
         # Timeframe to milliseconds mapping
         tf_to_ms = {
             '1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
-            '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000, '1w': 604_800_000
+            '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000, '1w': 604_800_000, '1M': 2_592_000_000
         }
 
         tf_ms = tf_to_ms.get(self.timeframe, 3_600_000)  # Default 1h
+
+        # Calculate estimated total candles for progress bar
+        estimated_candles = int((end_time - start_time) / tf_ms)
+
+        # Create progress bar
+        pbar = tqdm(
+            total=estimated_candles,
+            desc=f"      📥 {self.symbol}",
+            unit=" candles",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
+            leave=False
+        )
 
         while current_start < end_time:
             params = {
@@ -134,6 +147,9 @@ class AdvancedDataCollector:
 
                 all_data.extend(data)
 
+                # Update progress bar
+                pbar.update(len(data))
+
                 # Move to next batch (last candle timestamp + 1ms)
                 last_timestamp = int(data[-1][0])
 
@@ -145,13 +161,12 @@ class AdvancedDataCollector:
                 # Rate limiting
                 time.sleep(0.2)
 
-                # Log progress every 10k candles
-                if len(all_data) % 10000 == 0:
-                    logger.info(f"      📥 Fetched {len(all_data):,} candles...")
-
             except Exception as e:
                 logger.warning(f"OHLCV fetch error at {current_start}: {e}")
+                pbar.close()
                 break
+
+        pbar.close()
 
         if not all_data:
             return pd.DataFrame()
