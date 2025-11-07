@@ -235,7 +235,11 @@ class AdvancedDataCollector:
         """
         url = f"{self.BINANCE_BASE}/futures/data/openInterestHist"
 
-        # Ensure endTime is not in the future
+        # Binance USDT Futures OI data starts ~2019-09-09
+        BINANCE_OI_EARLIEST_MS = 1567987200000  # 2019-09-09 00:00:00 UTC
+
+        # Ensure start/end times are valid
+        start_time = max(start_time, BINANCE_OI_EARLIEST_MS)
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         end_time = min(end_time, now_ms)
 
@@ -300,31 +304,66 @@ class AdvancedDataCollector:
     # ============================================
 
     def fetch_funding_rate_binance(self, start_time: int, end_time: int) -> pd.DataFrame:
-        """Fetch Funding Rate from Binance"""
+        """
+        Fetch Funding Rate from Binance
+        Loops to fetch all historical funding data (Binance limit: 1000 per request)
+        """
         url = f"{self.BINANCE_BASE}/fapi/v1/fundingRate"
 
-        params = {
-            'symbol': self.symbol,
-            'startTime': start_time,
-            'endTime': end_time,
-            'limit': 1000
-        }
+        # Ensure endTime is not in the future
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        end_time = min(end_time, now_ms)
 
-        try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
+        all_data = []
+        current_start = start_time
 
-            data = response.json()
+        # Funding happens every 8 hours (28800000 ms)
+        FUNDING_INTERVAL_MS = 28_800_000
 
-            df = pd.DataFrame(data)
-            df['funding_ts'] = pd.to_datetime(df['fundingTime'], unit='ms')
-            df['funding_rate_binance'] = pd.to_numeric(df['fundingRate'])
+        while current_start < end_time:
+            params = {
+                'symbol': self.symbol,
+                'startTime': current_start,
+                'endTime': end_time,
+                'limit': 1000
+            }
 
-            return df[['funding_ts', 'funding_rate_binance']]
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
 
-        except Exception as e:
-            logger.warning(f"Funding fetch error: {e}")
+                data = response.json()
+
+                if not data:
+                    break
+
+                all_data.extend(data)
+
+                # Move to next batch (last funding timestamp + interval)
+                last_timestamp = int(data[-1]['fundingTime'])
+
+                if last_timestamp >= end_time:
+                    break
+
+                current_start = last_timestamp + FUNDING_INTERVAL_MS
+
+                time.sleep(0.2)  # Rate limiting
+
+            except Exception as e:
+                logger.warning(f"Funding fetch error at {current_start}: {e}")
+                break
+
+        if not all_data:
             return pd.DataFrame()
+
+        df = pd.DataFrame(all_data)
+        df['funding_ts'] = pd.to_datetime(pd.to_numeric(df['fundingTime']), unit='ms')
+        df['funding_rate_binance'] = pd.to_numeric(df['fundingRate'])
+
+        # Remove duplicates
+        df = df.drop_duplicates(subset=['fundingTime'], keep='first')
+
+        return df[['funding_ts', 'funding_rate_binance']]
 
     # ============================================
     # 6. Liquidations (Binance)
@@ -658,9 +697,9 @@ if __name__ == "__main__":
     # Process symbols
     results = []
 
-    if args.parallel and len(symbols_list) > 1:
-        # Parallel processing
-        logger.info(f"🔥 Starting parallel download with {args.max_workers} workers...\n")
+    if args.parallel:
+        # Parallel processing (even for 1 symbol, it's consistent behavior)
+        logger.info(f"⚡ Parallel mode enabled ({args.max_workers} workers)...\n")
 
         with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
             # Submit all tasks
