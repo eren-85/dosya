@@ -13,6 +13,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Fix Windows encoding issue (support emojis in print)
+import io
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import subprocess
 import time
 from datetime import datetime
@@ -118,6 +124,7 @@ def run_download(symbols: List[str], timeframe: str, market: str,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding='utf-8',  # Decode subprocess output as UTF-8
             bufsize=1,  # Line buffered
             universal_newlines=True
         )
