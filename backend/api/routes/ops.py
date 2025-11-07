@@ -26,6 +26,7 @@ class DownloadReq(BaseModel):
 class AdvancedDownloadReq(BaseModel):
     symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT", "ETHUSDT"]])
     timeframe: str = Field(..., examples=["1h"])
+    market: str = Field("futures", pattern="^(spot|futures)$", examples=["futures", "spot"])
     exchanges: List[str] = Field(["binance", "bybit"], examples=[["binance", "bybit"]])
     start_date: str = Field("auto", examples=["auto", "2024-01-01"])  # "auto" = earliest available
     end_date: Optional[str] = None  # None = today
@@ -288,6 +289,7 @@ def download_advanced(req: AdvancedDownloadReq):
         "python", "-m", "backend.data.advanced_collector",
         "--symbols", ",".join(req.symbols),
         "--timeframe", req.timeframe,
+        "--market", req.market,
         "--exchanges", ",".join(req.exchanges),
         "--start-date", req.start_date,
     ]

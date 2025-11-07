@@ -95,8 +95,13 @@ class AdvancedDataCollector:
         """
         Fetch OHLCV from Binance with taker_buy_base_volume
         Loops to fetch all data from start_time to end_time (handles Binance 1500 limit)
+        Supports both spot and futures markets
         """
-        url = f"{self.BINANCE_BASE}/fapi/v1/klines"
+        # Select API endpoint based on market type
+        if self.market == 'futures':
+            url = f"{self.BINANCE_BASE}/fapi/v1/klines"
+        else:  # spot
+            url = "https://api.binance.com/api/v3/klines"
 
         all_data = []
         current_start = start_time
@@ -657,52 +662,58 @@ class AdvancedDataCollector:
         logger.info("   💹 Calculating CVD...")
         df = self.calculate_cvd(df)
 
-        # 4. Open Interest
-        logger.info("   🔓 Fetching Open Interest...")
+        # 4. Open Interest (Futures only)
+        if self.market == 'futures':
+            logger.info("   🔓 Fetching Open Interest...")
 
-        # Binance OI - use actual_start_ts (from first OHLCV candle)
-        oi_df = self.fetch_open_interest_binance(actual_start_ts, end_ts)
-        if not oi_df.empty:
-            df = df.merge(oi_df, left_on='open_time', right_on='timestamp', how='left')
-            logger.info(f"   ✅ OI Binance: {oi_df['oi_binance'].notna().sum()} records")
+            # Binance OI - use actual_start_ts (from first OHLCV candle)
+            oi_df = self.fetch_open_interest_binance(actual_start_ts, end_ts)
+            if not oi_df.empty:
+                df = df.merge(oi_df, left_on='open_time', right_on='timestamp', how='left')
+                logger.info(f"   ✅ OI Binance: {oi_df['oi_binance'].notna().sum()} records")
 
-        # Bybit OI
-        if 'bybit' in self.exchanges and BybitAPI:
-            bybit_api = BybitAPI(self.symbol, self.timeframe)
-            oi_bybit_df = bybit_api.fetch_open_interest(actual_start_ts, end_ts)
-            if not oi_bybit_df.empty:
-                df = df.merge(oi_bybit_df, left_on='open_time', right_on='timestamp', how='left', suffixes=('', '_bybit'))
-                logger.info(f"   ✅ OI Bybit: {oi_bybit_df['oi_bybit'].notna().sum()} records")
+            # Bybit OI
+            if 'bybit' in self.exchanges and BybitAPI:
+                bybit_api = BybitAPI(self.symbol, self.timeframe)
+                oi_bybit_df = bybit_api.fetch_open_interest(actual_start_ts, end_ts)
+                if not oi_bybit_df.empty:
+                    df = df.merge(oi_bybit_df, left_on='open_time', right_on='timestamp', how='left', suffixes=('', '_bybit'))
+                    logger.info(f"   ✅ OI Bybit: {oi_bybit_df['oi_bybit'].notna().sum()} records")
+        else:
+            logger.info("   ⏭️  Skipping Open Interest (spot market)")
 
-        # 5. Funding Rate
-        logger.info("   💰 Fetching Funding Rate...")
+        # 5. Funding Rate (Futures only)
+        if self.market == 'futures':
+            logger.info("   💰 Fetching Funding Rate...")
 
-        # Binance Funding
-        funding_df = self.fetch_funding_rate_binance(actual_start_ts, end_ts)
-        if not funding_df.empty:
-            df = pd.merge_asof(
-                df.sort_values('open_time'),
-                funding_df.sort_values('funding_ts'),
-                left_on='open_time',
-                right_on='funding_ts',
-                direction='backward'
-            )
-            logger.info(f"   ✅ Funding Binance: {funding_df['funding_rate_binance'].notna().sum()} records")
-
-        # Bybit Funding
-        if 'bybit' in self.exchanges and BybitAPI:
-            bybit_api = BybitAPI(self.symbol, self.timeframe)
-            funding_bybit_df = bybit_api.fetch_funding_rate(actual_start_ts, end_ts)
-            if not funding_bybit_df.empty:
+            # Binance Funding
+            funding_df = self.fetch_funding_rate_binance(actual_start_ts, end_ts)
+            if not funding_df.empty:
                 df = pd.merge_asof(
                     df.sort_values('open_time'),
-                    funding_bybit_df.sort_values('funding_ts'),
+                    funding_df.sort_values('funding_ts'),
                     left_on='open_time',
                     right_on='funding_ts',
-                    direction='backward',
-                    suffixes=('', '_bybit')
+                    direction='backward'
                 )
-                logger.info(f"   ✅ Funding Bybit: {funding_bybit_df['funding_rate_bybit'].notna().sum()} records")
+                logger.info(f"   ✅ Funding Binance: {funding_df['funding_rate_binance'].notna().sum()} records")
+
+            # Bybit Funding
+            if 'bybit' in self.exchanges and BybitAPI:
+                bybit_api = BybitAPI(self.symbol, self.timeframe)
+                funding_bybit_df = bybit_api.fetch_funding_rate(actual_start_ts, end_ts)
+                if not funding_bybit_df.empty:
+                    df = pd.merge_asof(
+                        df.sort_values('open_time'),
+                        funding_bybit_df.sort_values('funding_ts'),
+                        left_on='open_time',
+                        right_on='funding_ts',
+                        direction='backward',
+                        suffixes=('', '_bybit')
+                    )
+                    logger.info(f"   ✅ Funding Bybit: {funding_bybit_df['funding_rate_bybit'].notna().sum()} records")
+        else:
+            logger.info("   ⏭️  Skipping Funding Rate (spot market)")
 
         # 6. ICT Sessions
         logger.info("   ⏰ Adding ICT sessions...")
@@ -734,6 +745,8 @@ if __name__ == "__main__":
     parser.add_argument('--symbols', type=str, default='BTCUSDT',
                         help='Comma-separated symbols (e.g., BTCUSDT,ETHUSDT)')
     parser.add_argument('--timeframe', type=str, default='1h')
+    parser.add_argument('--market', type=str, default='futures', choices=['spot', 'futures'],
+                        help='Market type: spot or futures (default: futures)')
     parser.add_argument('--exchanges', type=str, default='binance,bybit',
                         help='Comma-separated exchanges (e.g., binance,bybit)')
     parser.add_argument('--start-date', type=str, default='auto',
@@ -772,6 +785,7 @@ if __name__ == "__main__":
     logger.info(f"{'='*60}")
     logger.info(f"   Symbols: {', '.join(symbols_list)}")
     logger.info(f"   Timeframe: {args.timeframe}")
+    logger.info(f"   Market: {args.market.upper()}")
     logger.info(f"   Exchanges: {', '.join(exchanges_list)}")
     logger.info(f"   Date range: {start_date_resolved} → {args.end_date or 'today'}")
     logger.info(f"   Parallel: {'✅ Enabled (' + str(args.max_workers) + ' workers)' if args.parallel else '❌ Disabled (sequential)'}")
@@ -781,17 +795,18 @@ if __name__ == "__main__":
     def process_symbol(symbol: str, idx: int, total: int):
         """Process single symbol (runs in thread)"""
         logger.info(f"\n{'='*60}")
-        logger.info(f"📊 [{idx}/{total}] Processing {symbol}")
+        logger.info(f"📊 [{idx}/{total}] Processing {symbol} ({args.market.upper()})")
         logger.info(f"{'='*60}\n")
 
         try:
             collector = AdvancedDataCollector(
                 symbol=symbol,
                 timeframe=args.timeframe,
+                market=args.market,
                 exchanges=exchanges_list
             )
 
-            output_path = f"{args.output_dir}/{symbol}_{args.timeframe}_multi.parquet"
+            output_path = f"{args.output_dir}/{symbol}_{args.timeframe}_{args.market}_multi.parquet"
 
             df = collector.collect_all(
                 start_date=start_date_resolved,  # Use resolved date (auto → 2019-01-01)
