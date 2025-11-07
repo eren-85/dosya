@@ -91,7 +91,7 @@ class AdvancedDataCollector:
         self.symbol = symbol
         self.timeframe = timeframe
         self.market = market
-        self.exchanges = exchanges or ['binance', 'bybit']  # Default: Binance + Bybit
+        self.exchanges = exchanges or ['binance']  # Default: Binance only
         self.ob_max_age_ms = ob_max_age_ms  # OB max age (ms), None = auto-detect from TF
 
         # Timeframe mapping

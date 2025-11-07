@@ -75,7 +75,7 @@ CONFIGS = {
     ],
 
     # Exchanges
-    "exchanges": ["binance", "bybit"],
+    "exchanges": ["binance"],
 
     # Start date (auto = earliest available)
     "start_date": "auto",
