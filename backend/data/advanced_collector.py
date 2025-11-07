@@ -36,7 +36,6 @@ import time
 import logging
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,17 +114,15 @@ class AdvancedDataCollector:
 
         tf_ms = tf_to_ms.get(self.timeframe, 3_600_000)  # Default 1h
 
-        # Calculate estimated total candles for progress bar
+        # Calculate estimated total candles for progress
         estimated_candles = int((end_time - start_time) / tf_ms)
 
-        # Create progress bar
-        pbar = tqdm(
-            total=estimated_candles,
-            desc=f"      📥 {self.symbol}",
-            unit=" candles",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
-            leave=False
-        )
+        # Progress tracking (simple print-based, works in Docker)
+        last_log_count = 0
+        log_interval = max(5000, estimated_candles // 20)  # Log every 5% or 5000 candles
+        start_fetch_time = time.time()
+
+        logger.info(f"      📥 {self.symbol}: Starting download (~{estimated_candles:,} candles estimated)...")
 
         while current_start < end_time:
             params = {
@@ -147,8 +144,13 @@ class AdvancedDataCollector:
 
                 all_data.extend(data)
 
-                # Update progress bar
-                pbar.update(len(data))
+                # Update progress (log every interval)
+                if len(all_data) - last_log_count >= log_interval:
+                    percent = (len(all_data) / estimated_candles * 100) if estimated_candles > 0 else 0
+                    elapsed = time.time() - start_fetch_time
+                    rate = len(all_data) / elapsed if elapsed > 0 else 0
+                    logger.info(f"         ⏳ {len(all_data):,}/{estimated_candles:,} candles ({percent:.1f}%) [{rate:.1f} candles/s]")
+                    last_log_count = len(all_data)
 
                 # Move to next batch (last candle timestamp + 1ms)
                 last_timestamp = int(data[-1][0])
@@ -163,10 +165,13 @@ class AdvancedDataCollector:
 
             except Exception as e:
                 logger.warning(f"OHLCV fetch error at {current_start}: {e}")
-                pbar.close()
                 break
 
-        pbar.close()
+        # Final progress log
+        if all_data:
+            elapsed = time.time() - start_fetch_time
+            rate = len(all_data) / elapsed if elapsed > 0 else 0
+            logger.info(f"         ✅ {len(all_data):,} candles complete! [{elapsed:.1f}s, {rate:.1f} candles/s]")
 
         if not all_data:
             return pd.DataFrame()
