@@ -585,6 +585,86 @@ class AdvancedDataCollector:
     # 7. Order Book Snapshot (Binance)
     # ============================================
 
+    def attach_ob_to_nearest_bar(self, df: pd.DataFrame, ob_snapshot: Dict) -> pd.DataFrame:
+        """
+        Attach OB snapshot to the nearest bar with age/phase tracking
+
+        Logic:
+        - Find nearest bar to ob_ts (using close_time_ms)
+        - Calculate age = |ob_ts - bar_close_ms|
+        - Determine phase: 'pre' if ob before bar close, 'post' if after
+        - Only attach if age <= max_age (TF-dependent threshold)
+        - Add has_ob flag for filtering
+        """
+        if not ob_snapshot or df.empty:
+            return df
+
+        # Timeframe-based threshold
+        TF_MS = {'1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
+                 '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000, '1w': 604_800_000, '1M': 2_592_000_000}
+        tf_ms = TF_MS.get(self.timeframe, 300_000)
+        max_age = min(180_000, tf_ms // 2)  # e.g., 5m → 150 sec
+
+        ob_ts = ob_snapshot.get('ob_ts')
+        if not ob_ts:
+            return df
+
+        # Ensure close_time_ms exists
+        if 'close_time_ms' not in df.columns:
+            if 'close_time' in df.columns:
+                # Convert close_time to ms
+                if pd.api.types.is_datetime64_any_dtype(df['close_time']):
+                    df['close_time_ms'] = (df['close_time'].astype('int64') // 10**6).astype('Int64')
+                else:
+                    df['close_time_ms'] = pd.to_numeric(df['close_time'], errors='coerce').astype('Int64')
+            else:
+                logger.warning("Cannot attach OB: close_time(_ms) column missing")
+                return df
+
+        # Find nearest bar using binary search
+        close_times = df['close_time_ms'].to_numpy()
+        import numpy as np
+
+        pos = np.searchsorted(close_times, ob_ts, side='left')
+        candidates = []
+
+        if pos < len(close_times):
+            age = abs(close_times[pos] - ob_ts)
+            candidates.append((age, pos))
+        if pos > 0:
+            age = abs(close_times[pos-1] - ob_ts)
+            candidates.append((age, pos-1))
+
+        if not candidates:
+            return df
+
+        best_age, best_idx = min(candidates)
+        bar_close_ms = close_times[best_idx]
+        delta = ob_ts - bar_close_ms
+        phase = 'pre' if delta < 0 else 'post'
+
+        # Initialize OB columns with NaN
+        for key in ob_snapshot.keys():
+            if key not in df.columns:
+                df[key] = pd.NA
+
+        df['has_ob'] = False
+        df['ob_age_ms'] = pd.NA
+        df['ob_phase'] = pd.NA
+
+        # Attach OB to nearest bar if within threshold
+        if best_age <= max_age:
+            for key, val in ob_snapshot.items():
+                df.at[best_idx, key] = val
+            df.at[best_idx, 'has_ob'] = True
+            df.at[best_idx, 'ob_age_ms'] = int(best_age)
+            df.at[best_idx, 'ob_phase'] = phase
+            logger.info(f"   ✅ OB attached to bar #{best_idx}: age={best_age}ms ({phase}), within threshold ({max_age}ms)")
+        else:
+            logger.info(f"   ⚠️  OB snapshot too old: age={best_age}ms ({phase}), threshold={max_age}ms - not attached")
+
+        return df
+
     def fetch_order_book_snapshot(self) -> Dict:
         """
         Fetch current Order Book snapshot
@@ -771,15 +851,21 @@ class AdvancedDataCollector:
         actual_start_ts = int(df['open_time'].min().timestamp() * 1000)
         logger.info(f"   📅 Data starts: {df['open_time'].min().strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-        # 2. Volatility
+        # 2. Order Book (snapshot attached to nearest bar with age/phase tracking)
+        logger.info("   📖 Fetching Order Book snapshot...")
+        ob = self.fetch_order_book_snapshot()
+        if ob:
+            df = self.attach_ob_to_nearest_bar(df, ob)
+
+        # 3. Volatility
         logger.info("   📊 Calculating volatility...")
         df = self.calculate_volatility(df)
 
-        # 3. CVD
+        # 4. CVD
         logger.info("   💹 Calculating CVD...")
         df = self.calculate_cvd(df)
 
-        # 4. Open Interest (Futures only)
+        # 5. Open Interest (Futures only)
         if self.market == 'futures':
             logger.info("   🔓 Fetching Open Interest...")
 
@@ -799,7 +885,7 @@ class AdvancedDataCollector:
         else:
             logger.info("   ⏭️  Skipping Open Interest (spot market)")
 
-        # 5. Funding Rate (Futures only)
+        # 6. Funding Rate (Futures only)
         if self.market == 'futures':
             logger.info("   💰 Fetching Funding Rate...")
 
@@ -832,17 +918,9 @@ class AdvancedDataCollector:
         else:
             logger.info("   ⏭️  Skipping Funding Rate (spot market)")
 
-        # 6. ICT Sessions
+        # 7. ICT Sessions
         logger.info("   ⏰ Adding ICT sessions...")
         df = self.add_ict_sessions(df)
-
-        # 7. Order Book (current snapshot - can't get historical)
-        logger.info("   📖 Fetching Order Book snapshot...")
-        ob = self.fetch_order_book_snapshot()
-        if ob:
-            for key, val in ob.items():
-                df[key] = val
-            logger.info(f"   ✅ OB: {len(ob)} metrics")
 
         # ============================================
         # INCREMENTAL DOWNLOAD: Merge with existing data
