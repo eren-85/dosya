@@ -35,14 +35,18 @@ class SignalGenerator:
         logger.info(f"   Type: {self.model_type}")
 
     def _detect_model_type(self) -> str:
-        """Detect model type from file extension"""
+        """Detect model type from file extension and name"""
         suffix = self.model_path.suffix.lower()
+        name = self.model_path.stem.lower()
 
         if suffix == '.json':
             return 'xgboost'
         elif suffix == '.pth':
             return 'lstm'
         elif suffix == '.zip':
+            # Check if it's hybrid PPO
+            if 'hybrid' in name:
+                return 'ppo_hybrid'
             return 'ppo'
         elif suffix == '.pkl':
             return 'ensemble'
@@ -71,10 +75,10 @@ class SignalGenerator:
             self.model.eval()
             logger.info(f"   ✅ LSTM model loaded")
 
-        elif self.model_type == 'ppo':
+        elif self.model_type == 'ppo' or self.model_type == 'ppo_hybrid':
             from stable_baselines3 import PPO
             self.model = PPO.load(str(self.model_path))
-            logger.info(f"   ✅ PPO model loaded")
+            logger.info(f"   ✅ PPO model loaded ({'hybrid' if self.model_type == 'ppo_hybrid' else 'standard'})")
 
         elif self.model_type == 'ensemble':
             import pickle
@@ -109,7 +113,7 @@ class SignalGenerator:
                 return await self._generate_xgboost_signal(features)
             elif self.model_type == 'lstm':
                 return await self._generate_lstm_signal(features)
-            elif self.model_type == 'ppo':
+            elif self.model_type == 'ppo' or self.model_type == 'ppo_hybrid':
                 return await self._generate_ppo_signal(features)
             elif self.model_type == 'ensemble':
                 return await self._generate_ensemble_signal(features)
@@ -179,7 +183,7 @@ class SignalGenerator:
         }
 
     async def _generate_ppo_signal(self, features: Dict) -> Dict:
-        """Generate signal from PPO RL model"""
+        """Generate signal from PPO RL model (standard or hybrid)"""
         # PPO takes observation and returns action
         obs = np.array(list(features.values()), dtype=np.float32)
 
@@ -198,8 +202,9 @@ class SignalGenerator:
             'confidence': confidence,
             'probability': None,
             'metadata': {
-                'model_type': 'ppo',
-                'action': int(action)
+                'model_type': self.model_type,  # 'ppo' or 'ppo_hybrid'
+                'action': int(action),
+                'is_hybrid': self.model_type == 'ppo_hybrid'
             }
         }
 
