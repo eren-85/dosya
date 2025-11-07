@@ -89,7 +89,7 @@ class BybitAPI:
         }
 
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
 
             data = response.json()
@@ -100,12 +100,30 @@ class BybitAPI:
 
             rows = data['result']['list']
 
+            if not rows:
+                return pd.DataFrame()
+
             df = pd.DataFrame(rows)
-            df['timestamp'] = pd.to_datetime(pd.to_numeric(df['timestamp']), unit='ms')
+
+            # Bybit may return different field names - handle flexibly
+            # Common fields: 'timestamp', 'openInterest' OR 'time', 'openInterest'
+            timestamp_field = None
+            if 'timestamp' in df.columns:
+                timestamp_field = 'timestamp'
+            elif 'time' in df.columns:
+                timestamp_field = 'time'
+            else:
+                logger.warning(f"Bybit OI: no timestamp field found. Available: {df.columns.tolist()}")
+                return pd.DataFrame()
+
+            df['timestamp'] = pd.to_datetime(pd.to_numeric(df[timestamp_field]), unit='ms')
             df['oi_bybit'] = pd.to_numeric(df['openInterest'])
 
             return df[['timestamp', 'oi_bybit']]
 
+        except KeyError as e:
+            logger.warning(f"Bybit OI field error: {e}. Response fields: {df.columns.tolist() if 'df' in locals() else 'N/A'}")
+            return pd.DataFrame()
         except Exception as e:
             logger.warning(f"Bybit OI fetch error: {e}")
             return pd.DataFrame()

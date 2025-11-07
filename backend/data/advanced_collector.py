@@ -92,23 +92,66 @@ class AdvancedDataCollector:
     # ============================================
 
     def fetch_ohlcv_binance(self, start_time: int, end_time: int, limit: int = 1500) -> pd.DataFrame:
-        """Fetch OHLCV from Binance with taker_buy_base_volume"""
+        """
+        Fetch OHLCV from Binance with taker_buy_base_volume
+        Loops to fetch all data from start_time to end_time (handles Binance 1500 limit)
+        """
         url = f"{self.BINANCE_BASE}/fapi/v1/klines"
 
-        params = {
-            'symbol': self.symbol,
-            'interval': self.tf_map[self.timeframe],
-            'startTime': start_time,
-            'endTime': end_time,
-            'limit': limit
+        all_data = []
+        current_start = start_time
+
+        # Timeframe to milliseconds mapping
+        tf_to_ms = {
+            '1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
+            '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000, '1w': 604_800_000
         }
 
-        response = requests.get(url, params=params)
-        response.raise_for_status()
+        tf_ms = tf_to_ms.get(self.timeframe, 3_600_000)  # Default 1h
 
-        data = response.json()
+        while current_start < end_time:
+            params = {
+                'symbol': self.symbol,
+                'interval': self.tf_map[self.timeframe],
+                'startTime': current_start,
+                'endTime': end_time,
+                'limit': limit
+            }
 
-        df = pd.DataFrame(data, columns=[
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+
+                data = response.json()
+
+                if not data:
+                    break
+
+                all_data.extend(data)
+
+                # Move to next batch (last candle timestamp + 1ms)
+                last_timestamp = int(data[-1][0])
+
+                if last_timestamp >= end_time:
+                    break
+
+                current_start = last_timestamp + tf_ms
+
+                # Rate limiting
+                time.sleep(0.2)
+
+                # Log progress every 10k candles
+                if len(all_data) % 10000 == 0:
+                    logger.info(f"      📥 Fetched {len(all_data):,} candles...")
+
+            except Exception as e:
+                logger.warning(f"OHLCV fetch error at {current_start}: {e}")
+                break
+
+        if not all_data:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(all_data, columns=[
             'open_time', 'open', 'high', 'low', 'close', 'volume',
             'close_time', 'quote_asset_volume', 'trades',
             'taker_buy_base', 'taker_buy_quote', 'ignore'
@@ -120,6 +163,9 @@ class AdvancedDataCollector:
 
         df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
         df['has_binance'] = True
+
+        # Remove duplicates (can happen at batch boundaries)
+        df = df.drop_duplicates(subset=['open_time'], keep='first')
 
         return df
 
@@ -183,32 +229,71 @@ class AdvancedDataCollector:
     # ============================================
 
     def fetch_open_interest_binance(self, start_time: int, end_time: int) -> pd.DataFrame:
-        """Fetch Open Interest from Binance"""
+        """
+        Fetch Open Interest from Binance
+        Loops to fetch all historical OI data (Binance limit: 500 per request)
+        """
         url = f"{self.BINANCE_BASE}/futures/data/openInterestHist"
 
-        params = {
-            'symbol': self.symbol,
-            'period': self.tf_map[self.timeframe],
-            'startTime': start_time,
-            'endTime': end_time,
-            'limit': 500
+        # Ensure endTime is not in the future
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        end_time = min(end_time, now_ms)
+
+        all_data = []
+        current_start = start_time
+
+        # Timeframe to milliseconds
+        tf_to_ms = {
+            '1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
+            '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000, '1w': 604_800_000
         }
+        tf_ms = tf_to_ms.get(self.timeframe, 3_600_000)
 
-        try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
+        while current_start < end_time:
+            params = {
+                'symbol': self.symbol,
+                'period': self.tf_map[self.timeframe],
+                'startTime': current_start,
+                'endTime': end_time,
+                'limit': 500
+            }
 
-            data = response.json()
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
 
-            df = pd.DataFrame(data)
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df['oi_binance'] = pd.to_numeric(df['sumOpenInterest'])
+                data = response.json()
 
-            return df[['timestamp', 'oi_binance']]
+                if not data:
+                    break
 
-        except Exception as e:
-            logger.warning(f"OI fetch error: {e}")
+                all_data.extend(data)
+
+                # Move to next batch
+                last_timestamp = int(data[-1]['timestamp'])
+
+                if last_timestamp >= end_time:
+                    break
+
+                current_start = last_timestamp + tf_ms
+
+                time.sleep(0.2)  # Rate limiting
+
+            except Exception as e:
+                logger.warning(f"OI fetch error at {current_start}: {e}")
+                break
+
+        if not all_data:
             return pd.DataFrame()
+
+        df = pd.DataFrame(all_data)
+        df['timestamp'] = pd.to_datetime(pd.to_numeric(df['timestamp']), unit='ms')
+        df['oi_binance'] = pd.to_numeric(df['sumOpenInterest'])
+
+        # Remove duplicates
+        df = df.drop_duplicates(subset=['timestamp'], keep='first')
+
+        return df[['timestamp', 'oi_binance']]
 
     # ============================================
     # 5. Funding Rate (Binance)
