@@ -627,9 +627,50 @@ class AdvancedDataCollector:
         """
         Collect all data layers
 
+        Supports incremental downloads:
+        - If output_path exists, loads existing data
+        - Downloads only new data from the last timestamp
+        - Merges old and new data
+        - Removes duplicates and sorts by time
+
         Returns comprehensive DataFrame with all features
         """
         logger.info(f"🚀 Starting comprehensive data collection...")
+
+        # ============================================
+        # INCREMENTAL DOWNLOAD: Check existing data
+        # ============================================
+        existing_df = None
+        original_start_date = start_date
+
+        if output_path and Path(output_path).exists():
+            logger.info(f"📂 Found existing data: {output_path}")
+            try:
+                existing_df = pd.read_parquet(output_path)
+
+                if not existing_df.empty and 'open_time' in existing_df.columns:
+                    # Convert to datetime if needed
+                    if not pd.api.types.is_datetime64_any_dtype(existing_df['open_time']):
+                        existing_df['open_time'] = pd.to_datetime(existing_df['open_time'])
+
+                    last_timestamp = existing_df['open_time'].max()
+                    logger.info(f"   📅 Existing data: {len(existing_df)} rows")
+                    logger.info(f"   📅 Last timestamp: {last_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+                    # Resume from the next candle after the last one
+                    # Add 1 millisecond to avoid duplicate
+                    resume_ts = int(last_timestamp.timestamp() * 1000) + 1
+                    resume_date = datetime.fromtimestamp(resume_ts / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
+
+                    logger.info(f"   ♻️  Resuming from: {resume_date}")
+                    start_date = resume_date
+                else:
+                    logger.info(f"   ⚠️  Existing file is empty or malformed, re-downloading all data")
+                    existing_df = None
+            except Exception as e:
+                logger.warning(f"   ⚠️  Could not read existing file: {e}")
+                logger.info(f"   🔄 Re-downloading all data from {original_start_date}")
+                existing_df = None
 
         # Parse dates
         start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc).timestamp() * 1000)
@@ -638,6 +679,12 @@ class AdvancedDataCollector:
             end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc).timestamp() * 1000)
         else:
             end_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+        # Check if we need to download anything
+        if existing_df is not None and start_ts >= end_ts:
+            logger.info(f"   ✅ Data is already up-to-date!")
+            logger.info(f"   📊 Using existing data: {len(existing_df)} rows")
+            return existing_df
 
         # 1. Fetch OHLCV
         logger.info("   📈 Fetching OHLCV...")
@@ -726,6 +773,31 @@ class AdvancedDataCollector:
             for key, val in ob.items():
                 df[key] = val
             logger.info(f"   ✅ OB: {len(ob)} metrics")
+
+        # ============================================
+        # INCREMENTAL DOWNLOAD: Merge with existing data
+        # ============================================
+        if existing_df is not None and not existing_df.empty:
+            logger.info(f"\n🔀 Merging with existing data...")
+            logger.info(f"   Old data: {len(existing_df)} rows")
+            logger.info(f"   New data: {len(df)} rows")
+
+            # Combine old and new data
+            df_combined = pd.concat([existing_df, df], ignore_index=True)
+
+            # Remove duplicates (keep last occurrence = newer data)
+            # Convert to datetime if needed for comparison
+            if not pd.api.types.is_datetime64_any_dtype(df_combined['open_time']):
+                df_combined['open_time'] = pd.to_datetime(df_combined['open_time'])
+
+            df_combined = df_combined.drop_duplicates(subset=['open_time'], keep='last')
+
+            # Sort by time
+            df_combined = df_combined.sort_values('open_time').reset_index(drop=True)
+
+            logger.info(f"   Combined: {len(df_combined)} rows (removed {len(existing_df) + len(df) - len(df_combined)} duplicates)")
+
+            df = df_combined
 
         # Save
         if output_path:
