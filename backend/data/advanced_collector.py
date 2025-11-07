@@ -125,6 +125,46 @@ class AdvancedDataCollector:
         # Use print + flush for immediate output (logger is buffered)
         print(f"      📥 {self.symbol}: Starting download (~{estimated_candles:,} candles estimated)...", flush=True)
 
+        # Probe for first available data (in case coin listed later than start_time)
+        QUARTER_MS = 90 * 24 * 60 * 60 * 1000  # 3 months
+        found_first_data = False
+        probe_start = current_start
+
+        while probe_start < end_time and not found_first_data:
+            params = {
+                'symbol': self.symbol,
+                'interval': self.tf_map[self.timeframe],
+                'startTime': probe_start,
+                'endTime': end_time,
+                'limit': 10  # Small limit for probe
+            }
+
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+
+                if data:
+                    # Found first data! Update start time
+                    found_first_data = True
+                    current_start = probe_start
+                    first_candle_time = datetime.fromtimestamp(int(data[0][0])/1000, tz=timezone.utc)
+                    print(f"         📅 First candle found: {first_candle_time.strftime('%Y-%m-%d %H:%M:%S UTC')}", flush=True)
+                    break
+                else:
+                    # No data yet, advance 3 months
+                    probe_start += QUARTER_MS
+                    time.sleep(0.1)  # Light rate limit
+
+            except Exception as e:
+                logger.warning(f"Probe error at {probe_start}: {e}")
+                probe_start += QUARTER_MS
+
+        if not found_first_data:
+            print(f"         ⚠️  No data found for {self.symbol} in date range", flush=True)
+            return pd.DataFrame()
+
+        # Now fetch all data from actual start
         while current_start < end_time:
             params = {
                 'symbol': self.symbol,
@@ -873,12 +913,22 @@ if __name__ == "__main__":
     symbols_list = [s.strip().upper() for s in args.symbols.split(',')]
     exchanges_list = [e.strip().lower() for e in args.exchanges.split(',')]
 
-    # Auto start date detection
+    # Auto start date detection (market and exchange aware)
     if args.start_date == 'auto':
-        # Binance USDT Futures launched 2019-09-09
-        # Use earlier date to be safe, API will return empty for non-existent data
-        start_date_resolved = '2019-01-01'
-        logger.info(f"🔍 Auto mode: Using earliest Binance Futures date (2019-01-01)")
+        # Different markets have different launch dates
+        # Use earliest date for selected market, API will find actual first candle
+        if args.market == 'spot':
+            # Binance SPOT launched 2017-07-14
+            # Most altcoins listed much later, but BTC/ETH available from start
+            start_date_resolved = '2017-07-01'
+            logger.info(f"🔍 Auto mode: Using earliest SPOT date (2017-07-01, Binance launch)")
+        else:  # futures
+            # Binance USDT Futures launched 2019-09-09
+            # Most coins listed later, but we use early date for safety
+            start_date_resolved = '2019-01-01'
+            logger.info(f"🔍 Auto mode: Using earliest FUTURES date (2019-01-01, before Binance Futures launch)")
+
+        logger.info(f"   💡 Note: Actual start will be from first available candle for each coin")
     else:
         start_date_resolved = args.start_date
 
