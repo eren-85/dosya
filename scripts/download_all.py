@@ -95,9 +95,9 @@ def run_download(symbols: List[str], timeframe: str, market: str,
     """
     start_time = time.time()
 
-    # Build command
+    # Build command with -u flag for unbuffered output (shows progress bars)
     cmd = [
-        "python", "-m", "backend.data.advanced_collector",
+        "python", "-u", "-m", "backend.data.advanced_collector",
         "--symbols", ",".join(symbols),
         "--timeframe", timeframe,
         "--market", market,
@@ -112,20 +112,32 @@ def run_download(symbols: List[str], timeframe: str, market: str,
     print(f"{'='*80}")
 
     try:
-        result = subprocess.run(
+        # Use Popen for real-time output (shows progress bars)
+        process = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=3600  # 1 hour timeout
+            bufsize=1,  # Line buffered
+            universal_newlines=True
         )
 
-        elapsed = time.time() - start_time
+        # Stream output in real-time
+        output_lines = []
+        for line in process.stdout:
+            print(line, end='')  # Print immediately
+            output_lines.append(line)
 
-        if result.returncode == 0:
+        # Wait for completion
+        return_code = process.wait(timeout=3600)
+
+        elapsed = time.time() - start_time
+        output = ''.join(output_lines)
+
+        if return_code == 0:
             # Parse output for success count
-            output = result.stdout
             success_count = 0
-            for line in output.split('\n'):
+            for line in output_lines:
                 if 'Success:' in line:
                     # Extract "Success: X/Y"
                     parts = line.split('Success:')
@@ -151,7 +163,7 @@ def run_download(symbols: List[str], timeframe: str, market: str,
                 "symbols": symbols,
                 "timeframe": timeframe,
                 "market": market,
-                "error": result.stderr[:200],
+                "error": output[:200] if output else "Unknown error",
             }
 
     except subprocess.TimeoutExpired:
