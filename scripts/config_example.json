@@ -1,0 +1,46 @@
+{
+  "download": {
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT",
+      "SOLUSDT",
+      "ADAUSDT",
+      "XRPUSDT",
+      "DOGEUSDT",
+      "MATICUSDT",
+      "DOTUSDT",
+      "AVAXUSDT"
+    ],
+    "timeframes": [
+      "1h",
+      "4h",
+      "1d"
+    ],
+    "markets": [
+      "spot",
+      "futures"
+    ],
+    "exchanges": [
+      "binance",
+      "bybit"
+    ],
+    "start_date": "auto",
+    "max_workers": 3
+  },
+  "training": {
+    "models": [
+      "ppo",
+      "ensemble",
+      "lstm"
+    ],
+    "epochs": {
+      "ppo": 100,
+      "ensemble": 100,
+      "lstm": 50
+    },
+    "device": "cuda",
+    "separate_by_market": true,
+    "separate_by_timeframe": true
+  }
+}
