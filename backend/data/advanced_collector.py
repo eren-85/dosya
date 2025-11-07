@@ -288,25 +288,104 @@ class AdvancedDataCollector:
         return df
 
     # ============================================
+    # 2.5. Technical Indicators (RSI, MACD, Bollinger, MA)
+    # ============================================
+
+    def calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate essential technical indicators:
+        - RSI (14, 21)
+        - MACD (12, 26, 9)
+        - Bollinger Bands (20, 2)
+        - Moving Averages (SMA 20, 50, 200 | EMA 9, 21, 50)
+        - Volume SMA (20)
+        """
+        close = df['close']
+        volume = df['volume']
+
+        # RSI (Relative Strength Index)
+        def calculate_rsi(series, period=14):
+            delta = series.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / (loss + 1e-9)
+            rsi = 100 - (100 / (1 + rs))
+            return rsi
+
+        df['rsi_14'] = calculate_rsi(close, 14)
+        df['rsi_21'] = calculate_rsi(close, 21)
+
+        # MACD (Moving Average Convergence Divergence)
+        ema_12 = close.ewm(span=12, adjust=False).mean()
+        ema_26 = close.ewm(span=26, adjust=False).mean()
+        df['macd'] = ema_12 - ema_26
+        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+        df['macd_hist'] = df['macd'] - df['macd_signal']
+
+        # Bollinger Bands
+        sma_20 = close.rolling(20).mean()
+        std_20 = close.rolling(20).std()
+        df['bb_upper'] = sma_20 + (std_20 * 2)
+        df['bb_middle'] = sma_20
+        df['bb_lower'] = sma_20 - (std_20 * 2)
+        df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
+
+        # Simple Moving Averages
+        df['sma_20'] = close.rolling(20).mean()
+        df['sma_50'] = close.rolling(50).mean()
+        df['sma_200'] = close.rolling(200).mean()
+
+        # Exponential Moving Averages
+        df['ema_9'] = close.ewm(span=9, adjust=False).mean()
+        df['ema_21'] = close.ewm(span=21, adjust=False).mean()
+        df['ema_50'] = close.ewm(span=50, adjust=False).mean()
+
+        # Volume SMA
+        df['volume_sma_20'] = volume.rolling(20).mean()
+
+        # Volume Profile (simple: volume ratio)
+        df['volume_ratio'] = volume / (df['volume_sma_20'] + 1e-9)
+
+        # Volume momentum
+        df['volume_momentum'] = volume.pct_change(5)
+
+        return df
+
+    # ============================================
     # 3. CVD (Cumulative Volume Delta)
     # ============================================
 
     def calculate_cvd(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        CVD from Binance taker_buy_base_volume
-        delta_vol = 2 * taker_buy_base - volume_base
-        cvd = cumsum(delta_vol)
+        CVD (Cumulative Volume Delta)
+
+        Methods:
+        1. Binance taker_buy_base (best, accurate)
+        2. OHLC proxy (good, works for all exchanges)
+        3. Price direction fallback (basic)
+
+        OHLC proxy formula:
+        w = (close - low) / (high - low)  # Weight: 0-1
+        buy_vol = volume * w
+        sell_vol = volume * (1-w)
+        delta = buy_vol - sell_vol
         """
-        if 'taker_buy_base' in df.columns:
+        if 'taker_buy_base' in df.columns and df['taker_buy_base'].notna().sum() > 0:
+            # Method 1: Binance taker_buy_base (most accurate)
             df['delta_vol'] = 2 * df['taker_buy_base'] - df['volume']
             df['cvd'] = df['delta_vol'].cumsum()
-            df['cvd_src'] = 'binance'
+            df['cvd_src'] = 'binance_taker'
         else:
-            # Fallback: sign(ret) * volume
-            df['ret'] = df['close'].pct_change()
-            df['delta_vol'] = np.sign(df['ret']) * df['volume']
+            # Method 2: OHLC proxy (good approximation)
+            eps = 1e-9
+            range_hl = df['high'] - df['low'] + eps
+            w = ((df['close'] - df['low']) / range_hl).clip(0, 1)
+
+            buy_vol = df['volume'] * w
+            sell_vol = df['volume'] * (1 - w)
+            df['delta_vol'] = buy_vol - sell_vol
             df['cvd'] = df['delta_vol'].cumsum()
-            df['cvd_src'] = 'fallback'
+            df['cvd_src'] = 'ohlc_proxy'
 
         return df
 
@@ -883,6 +962,10 @@ class AdvancedDataCollector:
         # 3. Volatility
         logger.info("   📊 Calculating volatility...")
         df = self.calculate_volatility(df)
+
+        # 3.5. Technical Indicators
+        logger.info("   📈 Calculating technical indicators (RSI, MACD, Bollinger, MA)...")
+        df = self.calculate_technical_indicators(df)
 
         # 4. CVD
         logger.info("   💹 Calculating CVD...")
