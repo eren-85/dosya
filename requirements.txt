@@ -40,7 +40,7 @@ ta-lib==0.4.28
 
 # ===== VISUALIZATION & UTILS =====
 matplotlib==3.9.1
-tqdm==4.66.5
+tqdm==4.67.1  # Required by pandas-ta 0.4.71b0 (min: tqdm>=4.67.1)
 
 # ===== EXCHANGES / I/O =====
 ccxt==4.4.29
