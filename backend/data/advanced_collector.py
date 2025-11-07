@@ -232,14 +232,13 @@ class AdvancedDataCollector:
         """
         Fetch Open Interest from Binance
         Loops to fetch all historical OI data (Binance limit: 500 per request)
+
+        Note: OI data availability varies by symbol. The caller should use the
+        actual OHLCV start timestamp to avoid requesting data before the symbol existed.
         """
         url = f"{self.BINANCE_BASE}/futures/data/openInterestHist"
 
-        # Binance USDT Futures OI data starts ~2019-09-09
-        BINANCE_OI_EARLIEST_MS = 1567987200000  # 2019-09-09 00:00:00 UTC
-
-        # Ensure start/end times are valid
-        start_time = max(start_time, BINANCE_OI_EARLIEST_MS)
+        # Ensure endTime is not in the future
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         end_time = min(end_time, now_ms)
 
@@ -541,6 +540,11 @@ class AdvancedDataCollector:
 
         logger.info(f"   ✅ OHLCV: {len(df)} candles")
 
+        # Get actual data start time (use first candle timestamp for OI/Funding)
+        # This ensures we don't request OI/Funding for dates before the coin existed
+        actual_start_ts = int(df['open_time'].min().timestamp() * 1000)
+        logger.info(f"   📅 Data starts: {df['open_time'].min().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
         # 2. Volatility
         logger.info("   📊 Calculating volatility...")
         df = self.calculate_volatility(df)
@@ -552,8 +556,8 @@ class AdvancedDataCollector:
         # 4. Open Interest
         logger.info("   🔓 Fetching Open Interest...")
 
-        # Binance OI
-        oi_df = self.fetch_open_interest_binance(start_ts, end_ts)
+        # Binance OI - use actual_start_ts (from first OHLCV candle)
+        oi_df = self.fetch_open_interest_binance(actual_start_ts, end_ts)
         if not oi_df.empty:
             df = df.merge(oi_df, left_on='open_time', right_on='timestamp', how='left')
             logger.info(f"   ✅ OI Binance: {oi_df['oi_binance'].notna().sum()} records")
@@ -561,7 +565,7 @@ class AdvancedDataCollector:
         # Bybit OI
         if 'bybit' in self.exchanges and BybitAPI:
             bybit_api = BybitAPI(self.symbol, self.timeframe)
-            oi_bybit_df = bybit_api.fetch_open_interest(start_ts, end_ts)
+            oi_bybit_df = bybit_api.fetch_open_interest(actual_start_ts, end_ts)
             if not oi_bybit_df.empty:
                 df = df.merge(oi_bybit_df, left_on='open_time', right_on='timestamp', how='left', suffixes=('', '_bybit'))
                 logger.info(f"   ✅ OI Bybit: {oi_bybit_df['oi_bybit'].notna().sum()} records")
@@ -570,7 +574,7 @@ class AdvancedDataCollector:
         logger.info("   💰 Fetching Funding Rate...")
 
         # Binance Funding
-        funding_df = self.fetch_funding_rate_binance(start_ts, end_ts)
+        funding_df = self.fetch_funding_rate_binance(actual_start_ts, end_ts)
         if not funding_df.empty:
             df = pd.merge_asof(
                 df.sort_values('open_time'),
@@ -584,7 +588,7 @@ class AdvancedDataCollector:
         # Bybit Funding
         if 'bybit' in self.exchanges and BybitAPI:
             bybit_api = BybitAPI(self.symbol, self.timeframe)
-            funding_bybit_df = bybit_api.fetch_funding_rate(start_ts, end_ts)
+            funding_bybit_df = bybit_api.fetch_funding_rate(actual_start_ts, end_ts)
             if not funding_bybit_df.empty:
                 df = pd.merge_asof(
                     df.sort_values('open_time'),
