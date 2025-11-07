@@ -1,56 +1,49 @@
-# Multi-stage build for Python backend
-FROM python:3.12-slim as base
+# syntax=docker/dockerfile:1.7
+ARG PYVER=3.12
+FROM python:${PYVER}-slim AS base
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    libpq-dev \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+# Sistem bağımlılıkları (derleme araçları vs.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install TA-Lib C library (v0.4.0)
-# TA-Lib 0.6.8 Python wrapper should be compatible with NumPy 2.x
-RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-    tar -xzf ta-lib-0.4.0-src.tar.gz && \
-    cd ta-lib/ && \
-    ./configure --prefix=/usr && \
-    make && \
-    make install && \
-    cd .. && \
-    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
-
-# Set working directory
 WORKDIR /app
 
-# STEP 1: Install PyTorch with CUDA FIRST (before requirements.txt)
-# This prevents version conflicts with requirements.txt
-RUN pip install --upgrade pip && \
-    pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-
-# STEP 2: Install other Python dependencies
-# PyTorch lines in requirements.txt will be skipped (already installed)
+# Gereksinimler
 COPY requirements.txt .
+# Not: TA-Lib==0.6.8 wheel C kütüphanesini içerir — ekstra kurulum yok
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu121 \
+        torch==2.5.1 torchvision==0.20.1
 
-RUN pip install -r requirements.txt
+# Uygulama kodu
+COPY backend ./backend
+COPY scripts ./scripts
 
-# Copy application code
-COPY backend /app/backend
-COPY scripts /app/scripts
-
-# Create data directories (volumes will mount here)
+# Veri klasörleri
 RUN mkdir -p /app/data/historical /app/data/models /app/data/knowledge \
     /app/data/annotations /app/data/patterns /app/data/training
 
-# Expose port
+# ---------- Backend ----------
+FROM base AS backend
 EXPOSE 8000
+CMD ["python","-m","uvicorn","backend.api.main:app","--host","0.0.0.0","--port","8000"]
 
-# Default command (can be overridden in docker-compose)
-CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ---------- Celery Worker ----------
+FROM base AS celery_worker
+CMD ["celery","-A","backend.tasks.celery_app","worker","-l","INFO","-Q","default"]
+
+# ---------- Celery Beat ----------
+FROM base AS celery_beat
+CMD ["celery","-A","backend.tasks.celery_app","beat","-l","INFO"]
+
+# ---------- Flower ----------
+FROM base AS flower
+EXPOSE 5555
+CMD ["celery","-A","backend.tasks.celery_app","flower","--port=5555"]

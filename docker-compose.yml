@@ -29,6 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: backend
     container_name: dosya_backend
     env_file:
       - .env
@@ -62,6 +63,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: celery_worker
     container_name: dosya_celery_worker
     env_file:
       - .env
@@ -83,6 +85,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: celery_beat
     container_name: dosya_celery_beat
     env_file:
       - .env
@@ -104,6 +107,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: flower
     container_name: dosya_flower
     env_file:
       - .env
