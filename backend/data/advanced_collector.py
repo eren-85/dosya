@@ -628,7 +628,8 @@ if __name__ == "__main__":
     parser.add_argument('--timeframe', type=str, default='1h')
     parser.add_argument('--exchanges', type=str, default='binance,bybit',
                         help='Comma-separated exchanges (e.g., binance,bybit)')
-    parser.add_argument('--start-date', type=str, default='2024-01-01')
+    parser.add_argument('--start-date', type=str, default='auto',
+                        help='Start date (YYYY-MM-DD) or "auto" for earliest available data')
     parser.add_argument('--end-date', type=str, default=None)
     parser.add_argument('--output-dir', type=str, default='data/advanced')
 
@@ -649,13 +650,22 @@ if __name__ == "__main__":
     symbols_list = [s.strip().upper() for s in args.symbols.split(',')]
     exchanges_list = [e.strip().lower() for e in args.exchanges.split(',')]
 
+    # Auto start date detection
+    if args.start_date == 'auto':
+        # Binance USDT Futures launched 2019-09-09
+        # Use earlier date to be safe, API will return empty for non-existent data
+        start_date_resolved = '2019-01-01'
+        logger.info(f"🔍 Auto mode: Using earliest Binance Futures date (2019-01-01)")
+    else:
+        start_date_resolved = args.start_date
+
     logger.info(f"\n{'='*60}")
     logger.info(f"🚀 Advanced Data Collection Starting")
     logger.info(f"{'='*60}")
     logger.info(f"   Symbols: {', '.join(symbols_list)}")
     logger.info(f"   Timeframe: {args.timeframe}")
     logger.info(f"   Exchanges: {', '.join(exchanges_list)}")
-    logger.info(f"   Date range: {args.start_date} → {args.end_date or 'today'}")
+    logger.info(f"   Date range: {start_date_resolved} → {args.end_date or 'today'}")
     logger.info(f"   Parallel: {'✅ Enabled (' + str(args.max_workers) + ' workers)' if args.parallel else '❌ Disabled (sequential)'}")
     logger.info(f"{'='*60}\n")
 
@@ -676,7 +686,7 @@ if __name__ == "__main__":
             output_path = f"{args.output_dir}/{symbol}_{args.timeframe}_multi.parquet"
 
             df = collector.collect_all(
-                start_date=args.start_date,
+                start_date=start_date_resolved,  # Use resolved date (auto → 2019-01-01)
                 end_date=args.end_date,
                 output_path=output_path
             )

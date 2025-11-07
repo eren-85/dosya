@@ -27,7 +27,7 @@ class AdvancedDownloadReq(BaseModel):
     symbols: List[str] = Field(..., min_length=1, examples=[["BTCUSDT", "ETHUSDT"]])
     timeframe: str = Field(..., examples=["1h"])
     exchanges: List[str] = Field(["binance", "bybit"], examples=[["binance", "bybit"]])
-    start_date: str = Field(..., examples=["2024-01-01"])
+    start_date: str = Field("auto", examples=["auto", "2024-01-01"])  # "auto" = earliest available
     end_date: Optional[str] = None  # None = today
     # Feature toggles
     include_volatility: bool = True  # ATR, Parkinson, Rogers-Satchell
