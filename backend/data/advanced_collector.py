@@ -235,6 +235,9 @@ class AdvancedDataCollector:
 
         Note: OI data availability varies by symbol. The caller should use the
         actual OHLCV start timestamp to avoid requesting data before the symbol existed.
+
+        If OI data doesn't exist at start_time, automatically advances 30 days forward
+        until finding the first valid OI record.
         """
         url = f"{self.BINANCE_BASE}/futures/data/openInterestHist"
 
@@ -252,6 +255,56 @@ class AdvancedDataCollector:
         }
         tf_ms = tf_to_ms.get(self.timeframe, 3_600_000)
 
+        # STEP 1: Find first valid OI timestamp (handle coins with late OI data)
+        # Try advancing 30 days at a time until we get a valid response
+        MONTH_MS = 30 * 24 * 60 * 60 * 1000  # 30 days
+        probe_start = current_start
+        found_start = False
+
+        while probe_start < end_time and not found_start:
+            params = {
+                'symbol': self.symbol,
+                'period': self.tf_map[self.timeframe],
+                'startTime': probe_start,
+                'endTime': end_time,
+                'limit': 500
+            }
+
+            try:
+                response = requests.get(url, params=params, timeout=30)
+
+                if response.status_code == 400:
+                    # OI data doesn't exist at this time, advance forward
+                    probe_start += MONTH_MS
+                    continue
+
+                response.raise_for_status()
+                data = response.json()
+
+                if data:
+                    # Found first valid OI record!
+                    found_start = True
+                    current_start = probe_start
+                    all_data.extend(data)
+
+                    # Move to next batch
+                    last_timestamp = int(data[-1]['timestamp'])
+                    current_start = last_timestamp + tf_ms
+                    break
+                else:
+                    # Empty response, try next month
+                    probe_start += MONTH_MS
+
+            except Exception as e:
+                # Other errors, try next month
+                probe_start += MONTH_MS
+                continue
+
+        if not found_start:
+            # No OI data available for this symbol in the requested range
+            return pd.DataFrame()
+
+        # STEP 2: Normal pagination from first valid timestamp
         while current_start < end_time:
             params = {
                 'symbol': self.symbol,
@@ -306,6 +359,9 @@ class AdvancedDataCollector:
         """
         Fetch Funding Rate from Binance
         Loops to fetch all historical funding data (Binance limit: 1000 per request)
+
+        If funding data doesn't exist at start_time, automatically advances 30 days forward
+        until finding the first valid funding record.
         """
         url = f"{self.BINANCE_BASE}/fapi/v1/fundingRate"
 
@@ -319,6 +375,54 @@ class AdvancedDataCollector:
         # Funding happens every 8 hours (28800000 ms)
         FUNDING_INTERVAL_MS = 28_800_000
 
+        # STEP 1: Find first valid funding timestamp
+        MONTH_MS = 30 * 24 * 60 * 60 * 1000  # 30 days
+        probe_start = current_start
+        found_start = False
+
+        while probe_start < end_time and not found_start:
+            params = {
+                'symbol': self.symbol,
+                'startTime': probe_start,
+                'endTime': end_time,
+                'limit': 1000
+            }
+
+            try:
+                response = requests.get(url, params=params, timeout=30)
+
+                if response.status_code == 400:
+                    # Funding data doesn't exist at this time, advance forward
+                    probe_start += MONTH_MS
+                    continue
+
+                response.raise_for_status()
+                data = response.json()
+
+                if data:
+                    # Found first valid funding record!
+                    found_start = True
+                    current_start = probe_start
+                    all_data.extend(data)
+
+                    # Move to next batch
+                    last_timestamp = int(data[-1]['fundingTime'])
+                    current_start = last_timestamp + FUNDING_INTERVAL_MS
+                    break
+                else:
+                    # Empty response, try next month
+                    probe_start += MONTH_MS
+
+            except Exception as e:
+                # Other errors, try next month
+                probe_start += MONTH_MS
+                continue
+
+        if not found_start:
+            # No funding data available for this symbol in the requested range
+            return pd.DataFrame()
+
+        # STEP 2: Normal pagination from first valid timestamp
         while current_start < end_time:
             params = {
                 'symbol': self.symbol,
