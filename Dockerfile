@@ -16,8 +16,16 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# TA-Lib: Removed (incompatible with NumPy 2.x)
-# Using pandas-ta instead which provides all technical indicators
+# Install TA-Lib C library (v0.4.0)
+# TA-Lib 0.6.8 Python wrapper should be compatible with NumPy 2.x
+RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzf ta-lib-0.4.0-src.tar.gz && \
+    cd ta-lib/ && \
+    ./configure --prefix=/usr && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
 
 # Set working directory
 WORKDIR /app

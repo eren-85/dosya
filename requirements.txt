@@ -35,8 +35,7 @@ tensorboard==2.18.0
 
 # ===== TECHNICAL ANALYSIS =====
 pandas-ta==0.4.71b0       # Requires NumPy >= 2.2.6
-# TA-Lib: Removed (incompatible with NumPy 2.x)
-# pandas-ta provides all technical indicators (RSI, MACD, EMA, etc.)
+TA-Lib==0.6.8             # NumPy 2.x compatible version (C library installed in Dockerfile)
 
 # ===== VISUALIZATION & UTILS =====
 matplotlib==3.9.2  # Fixed: 3.9.1 is yanked
