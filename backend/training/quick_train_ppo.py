@@ -222,19 +222,91 @@ def train_ppo(
 
 if __name__ == "__main__":
     import argparse
+    import json
 
-    parser = argparse.ArgumentParser(description='Train PPO Agent')
-    parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
-    parser.add_argument('--timeframe', type=str, default='1d', help='Candle timeframe')
-    parser.add_argument('--market', type=str, default='futures', help='spot or futures')
-    parser.add_argument('--timesteps', type=int, default=50000, help='Training timesteps')
-    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features')
+    parser = argparse.ArgumentParser(description='Train PPO Agent (Batch Mode)')
+
+    # Batch training parameters
+    parser.add_argument('--data-files', type=str, required=True, help='Comma-separated parquet file paths')
+    parser.add_argument('--epochs', type=int, default=10, help='Number of PPO epochs (n_epochs parameter)')
+    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'], help='Training device')
+    parser.add_argument('--output-name', type=str, required=True, help='Output model name (e.g., spot_1h_ppo)')
+    parser.add_argument('--hyperparams', type=str, required=True, help='Path to hyperparameters JSON file')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--eval-config', type=str, help='Path to evaluation config JSON file')
+
+    # Legacy parameters (for backward compatibility)
+    parser.add_argument('--symbol', type=str, help='Trading symbol (legacy mode)')
+    parser.add_argument('--timeframe', type=str, help='Candle timeframe (legacy mode)')
+    parser.add_argument('--market', type=str, help='spot or futures (legacy mode)')
+    parser.add_argument('--timesteps', type=int, help='Training timesteps (legacy mode)')
+    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features (legacy mode)')
+
     args = parser.parse_args()
 
-    model = train_ppo(
-        symbol=args.symbol,
-        timeframe=args.timeframe,
-        market_type=args.market,
-        total_timesteps=args.timesteps,
-        use_advanced=not args.no_advanced
+    # Set random seed
+    np.random.seed(args.seed)
+    import random
+    import torch
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    # Load hyperparameters
+    with open(args.hyperparams, 'r') as f:
+        hyperparams = json.load(f)
+
+    logger.info(f"🤖 Starting PPO Batch Training")
+    logger.info(f"   Output: {args.output_name}")
+    logger.info(f"   Device: {args.device}")
+    logger.info(f"   Seed: {args.seed}")
+    logger.info(f"   Total timesteps: {hyperparams.get('total_timesteps', 5_000_000):,}")
+
+    # Load data files
+    data_file_paths = args.data_files.split(',')
+    logger.info(f"   Loading {len(data_file_paths)} data files...")
+
+    dfs = []
+    for file_path in data_file_paths:
+        df = pd.read_parquet(file_path.strip())
+        logger.info(f"      - {Path(file_path).name}: {len(df)} rows")
+        dfs.append(df)
+
+    # Concatenate all data
+    df_combined = pd.concat(dfs, ignore_index=True).sort_values('open_time').reset_index(drop=True)
+    logger.info(f"   Combined data: {len(df_combined)} rows")
+
+    # Create environment
+    env = DummyVecEnv([lambda: SimpleTradingEnv(df_combined)])
+
+    # Create PPO agent with hyperparameters
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        learning_rate=hyperparams.get('learning_rate', 3e-4),
+        n_steps=hyperparams.get('n_steps', 4096),
+        batch_size=hyperparams.get('batch_size', 256),
+        n_epochs=args.epochs,  # Use CLI epochs parameter
+        gamma=hyperparams.get('gamma', 0.995),
+        gae_lambda=hyperparams.get('gae_lambda', 0.97),
+        clip_range=hyperparams.get('clip_range', 0.2),
+        ent_coef=hyperparams.get('ent_coef', 0.001),
+        vf_coef=hyperparams.get('vf_coef', 0.5),
+        max_grad_norm=hyperparams.get('max_grad_norm', 0.5),
+        target_kl=hyperparams.get('target_kl', 0.02),
     )
+
+    # Train
+    logger.info(f"\n🚀 Training started...")
+    total_timesteps = hyperparams.get('total_timesteps', 5_000_000)
+
+    callback = TrainingCallback()
+    model.learn(total_timesteps=total_timesteps, callback=callback)
+
+    # Save model
+    save_path = Path("data/models") / f"{args.output_name}.zip"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save(str(save_path))
+
+    logger.info(f"\n✅ Training complete!")
+    logger.info(f"   Model saved: {save_path}")

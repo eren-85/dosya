@@ -259,22 +259,242 @@ def train_lstm(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train LSTM Model')
-    parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
-    parser.add_argument('--timeframe', type=str, default='1d', help='Candle timeframe')
-    parser.add_argument('--market', type=str, default='futures', help='spot or futures')
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
-    parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
-    parser.add_argument('--seq-length', type=int, default=60, help='Sequence length')
-    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features')
+    import json
+
+    parser = argparse.ArgumentParser(description='Train LSTM Model (Batch Mode)')
+
+    # Batch training parameters
+    parser.add_argument('--data-files', type=str, required=True, help='Comma-separated parquet file paths')
+    parser.add_argument('--epochs', type=int, default=50, help='Number of training epochs')
+    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'], help='Training device')
+    parser.add_argument('--output-name', type=str, required=True, help='Output model name (e.g., spot_1h_lstm)')
+    parser.add_argument('--hyperparams', type=str, required=True, help='Path to hyperparameters JSON file')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--eval-config', type=str, help='Path to evaluation config JSON file')
+
+    # Legacy parameters (for backward compatibility)
+    parser.add_argument('--symbol', type=str, help='Trading symbol (legacy mode)')
+    parser.add_argument('--timeframe', type=str, help='Candle timeframe (legacy mode)')
+    parser.add_argument('--market', type=str, help='spot or futures (legacy mode)')
+    parser.add_argument('--batch-size', type=int, help='Batch size (legacy mode)')
+    parser.add_argument('--seq-length', type=int, help='Sequence length (legacy mode)')
+    parser.add_argument('--no-advanced', action='store_true', help='Disable advanced features (legacy mode)')
+
     args = parser.parse_args()
 
-    model = train_lstm(
-        symbol=args.symbol,
-        timeframe=args.timeframe,
-        market_type=args.market,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        seq_length=args.seq_length,
-        use_advanced=not args.no_advanced
+    # Set random seed
+    np.random.seed(args.seed)
+    import random
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    # Load hyperparameters
+    with open(args.hyperparams, 'r') as f:
+        hyperparams = json.load(f)
+
+    logger.info(f"🧠 Starting LSTM Batch Training")
+    logger.info(f"   Output: {args.output_name}")
+    logger.info(f"   Device: {args.device}")
+    logger.info(f"   Seed: {args.seed}")
+    logger.info(f"   Epochs: {args.epochs}")
+    logger.info(f"   Sequence length: {hyperparams.get('seq_len', 128)}")
+    logger.info(f"   Hidden size: {hyperparams.get('hidden_size', 256)}")
+
+    # Device
+    device = torch.device(args.device)
+    logger.info(f"   Using device: {device}")
+
+    # Load data files
+    data_file_paths = args.data_files.split(',')
+    logger.info(f"   Loading {len(data_file_paths)} data files...")
+
+    dfs = []
+    for file_path in data_file_paths:
+        df = pd.read_parquet(file_path.strip())
+        logger.info(f"      - {Path(file_path).name}: {len(df)} rows")
+        dfs.append(df)
+
+    # Concatenate all data
+    df_combined = pd.concat(dfs, ignore_index=True).sort_values('open_time').reset_index(drop=True)
+    logger.info(f"   Combined data: {len(df_combined)} rows")
+
+    # Features
+    feature_cols = [col for col in df_combined.columns if col not in [
+        'open', 'high', 'low', 'close', 'volume',
+        'open_time', 'close_time', 'quote_asset_volume',
+        'trades', 'taker_base', 'taker_quote', 'ignore'
+    ]]
+
+    logger.info(f"   Features: {len(feature_cols)}")
+
+    # Target: next candle price change
+    df_combined['target'] = df_combined['close'].pct_change().shift(-1)
+    df_combined = df_combined.dropna()
+
+    # Prepare data
+    data = df_combined[feature_cols + ['target']].values
+
+    # Normalize
+    scaler = StandardScaler()
+    data = scaler.fit_transform(data)
+
+    # Create sequences
+    seq_length = hyperparams.get('seq_len', 128)
+    logger.info(f"   Creating sequences (length={seq_length})...")
+    X, y = create_sequences(data, seq_length)
+
+    logger.info(f"   Sequences: {len(X)}")
+
+    # Train/test split
+    split_idx = int(len(X) * 0.8)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+
+    logger.info(f"   Train: {len(X_train)} sequences")
+    logger.info(f"   Test:  {len(X_test)} sequences")
+
+    # Create datasets
+    batch_size = hyperparams.get('batch_size', 32)
+    train_dataset = TimeSeriesDataset(X_train, y_train)
+    test_dataset = TimeSeriesDataset(X_test, y_test)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    # Model
+    input_size = X.shape[2]
+    hidden_size = hyperparams.get('hidden_size', 256)
+    num_layers = hyperparams.get('num_layers', 2)
+    dropout = hyperparams.get('dropout', 0.2)
+
+    model = LSTMModel(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        num_layers=num_layers,
+        dropout=dropout
     )
+    model = model.to(device)
+
+    logger.info(f"   Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    # Loss and optimizer
+    criterion = nn.MSELoss()
+    learning_rate = hyperparams.get('learning_rate', 1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    # Learning rate scheduler (ReduceLROnPlateau)
+    reduce_lr_patience = hyperparams.get('reduce_lr_patience', 5)
+    reduce_lr_factor = hyperparams.get('reduce_lr_factor', 0.5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=reduce_lr_factor,
+        patience=reduce_lr_patience,
+        verbose=True
+    )
+
+    # Mixed precision training
+    use_amp = hyperparams.get('use_amp', True) and device.type == 'cuda'
+    scaler_amp = torch.cuda.amp.GradScaler() if use_amp else None
+
+    # Gradient clipping
+    grad_clip = hyperparams.get('grad_clip', 0.5)
+
+    # Early stopping
+    early_stopping = hyperparams.get('early_stopping', True)
+    patience = hyperparams.get('patience', 10)
+    patience_counter = 0
+
+    # Training loop
+    logger.info("\n🚀 Training started...")
+
+    best_test_loss = float('inf')
+
+    for epoch in range(args.epochs):
+        # Train
+        model.train()
+        train_loss = 0
+
+        for X_batch, y_batch in train_loader:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+
+            optimizer.zero_grad()
+
+            # Mixed precision
+            if scaler_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(X_batch).squeeze()
+                    loss = criterion(outputs, y_batch)
+
+                scaler_amp.scale(loss).backward()
+
+                # Gradient clipping
+                if grad_clip > 0:
+                    scaler_amp.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+                scaler_amp.step(optimizer)
+                scaler_amp.update()
+            else:
+                outputs = model(X_batch).squeeze()
+                loss = criterion(outputs, y_batch)
+                loss.backward()
+
+                # Gradient clipping
+                if grad_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+                optimizer.step()
+
+            train_loss += loss.item()
+
+        train_loss /= len(train_loader)
+
+        # Test
+        model.eval()
+        test_loss = 0
+
+        with torch.no_grad():
+            for X_batch, y_batch in test_loader:
+                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                outputs = model(X_batch).squeeze()
+                loss = criterion(outputs, y_batch)
+                test_loss += loss.item()
+
+        test_loss /= len(test_loader)
+
+        # Update learning rate
+        scheduler.step(test_loss)
+
+        # Log
+        if (epoch + 1) % 5 == 0:
+            logger.info(f"   Epoch {epoch+1}/{args.epochs} - Train Loss: {train_loss:.6f}, Test Loss: {test_loss:.6f}")
+
+        # Save best model
+        if test_loss < best_test_loss:
+            best_test_loss = test_loss
+            patience_counter = 0
+
+            save_path = Path("data/models") / f"{args.output_name}.pth"
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'scaler': scaler,
+                'input_size': input_size,
+                'seq_length': seq_length,
+                'feature_cols': feature_cols,
+                'hyperparams': hyperparams
+            }, save_path)
+        else:
+            patience_counter += 1
+
+        # Early stopping
+        if early_stopping and patience_counter >= patience:
+            logger.info(f"\n⏸️  Early stopping triggered after {epoch+1} epochs")
+            break
+
+    logger.info(f"\n✅ Training complete!")
+    logger.info(f"   Best test loss: {best_test_loss:.6f}")
+    logger.info(f"   Model saved: {save_path}")
