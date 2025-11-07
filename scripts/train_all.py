@@ -35,10 +35,13 @@ CONFIGS = {
         "lstm",     # Bidirectional LSTM
     ],
 
-    # Training parameters
+    # Update-epoch counts (model-specific)
+    # PPO: n_epochs (how many times to iterate over each batch)
+    # Ensemble: not used (uses early_stopping instead)
+    # LSTM: training epochs
     "epochs": {
-        "ppo": 100,
-        "ensemble": 100,
+        "ppo": 10,         # SB3 n_epochs parameter
+        "ensemble": 1,     # Not used (early_stopping handles this)
         "lstm": 50,
     },
 
@@ -53,6 +56,134 @@ CONFIGS = {
 
     # Output directory for models
     "output_dir": "data/models",
+
+    # ============================================
+    # PPO HYPERPARAMETERS (Stable-Baselines3)
+    # ============================================
+    "ppo": {
+        "total_timesteps": 5_000_000,    # Total training steps (main duration)
+        "n_steps": 4096,                 # Rollout buffer size
+        "batch_size": 256,               # Mini-batch size
+        "learning_rate": 3e-4,           # Initial learning rate
+        "clip_range": 0.2,               # PPO clipping parameter
+        "gamma": 0.995,                  # Discount factor
+        "gae_lambda": 0.97,              # GAE lambda
+        "ent_coef": 0.001,               # Entropy coefficient (exploration)
+        "vf_coef": 0.5,                  # Value function coefficient
+        "max_grad_norm": 0.5,            # Gradient clipping
+        "normalize_advantage": True,     # Normalize advantages
+        "target_kl": 0.02,               # Target KL divergence (early stop)
+        "policy_kwargs": {
+            "net_arch": [256, 256],      # Policy network architecture
+            "activation_fn": "tanh",     # Activation function
+        },
+        "use_sde": False,                # State-dependent exploration
+        "sde_sample_freq": -1,
+        "normalize_obs": True,           # Normalize observations
+        "normalize_reward": True,        # Normalize rewards
+    },
+
+    # ============================================
+    # LSTM HYPERPARAMETERS
+    # ============================================
+    "lstm": {
+        "seq_len": 128,                  # Sequence length (lookback window)
+        "hidden_size": 256,              # LSTM hidden size
+        "num_layers": 2,                 # Number of LSTM layers
+        "dropout": 0.2,                  # Dropout rate
+        "learning_rate": 1e-3,           # Initial learning rate
+        "grad_clip": 0.5,                # Gradient clipping
+        "early_stopping": True,          # Enable early stopping
+        "patience": 10,                  # Early stopping patience
+        "reduce_lr_patience": 5,         # ReduceLROnPlateau patience
+        "reduce_lr_factor": 0.5,         # LR reduction factor
+        "min_lr": 1e-6,                  # Minimum learning rate
+        "bidirectional": True,           # Bidirectional LSTM
+        "batch_first": True,
+    },
+
+    # ============================================
+    # ENSEMBLE HYPERPARAMETERS (LightGBM/XGBoost/CatBoost)
+    # ============================================
+    "ensemble": {
+        "models": ["lightgbm", "xgboost", "catboost"],  # Models to ensemble
+
+        # LightGBM params
+        "lightgbm": {
+            "n_estimators": 1200,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 63,            # 2^depth - 1
+            "subsample": 0.8,            # Row sampling
+            "colsample_bytree": 0.8,     # Column sampling
+            "reg_alpha": 0.1,            # L1 regularization
+            "reg_lambda": 0.1,           # L2 regularization
+            "min_child_samples": 20,
+            "early_stopping_rounds": 100,
+            "verbose": -1,
+        },
+
+        # XGBoost params
+        "xgboost": {
+            "n_estimators": 1200,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.1,
+            "min_child_weight": 1,
+            "early_stopping_rounds": 100,
+            "tree_method": "gpu_hist",   # GPU acceleration
+        },
+
+        # CatBoost params
+        "catboost": {
+            "iterations": 1200,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "subsample": 0.8,
+            "colsample_bylevel": 0.8,
+            "reg_lambda": 0.1,
+            "early_stopping_rounds": 100,
+            "task_type": "GPU",          # GPU acceleration
+            "verbose": False,
+        },
+
+        # Ensemble strategy
+        "ensemble_method": "voting",     # 'voting' or 'stacking'
+        "voting_weights": [1.0, 1.0, 1.0],  # Equal weights
+    },
+
+    # ============================================
+    # EVALUATION & MONITORING
+    # ============================================
+    "evaluation": {
+        "eval_every": 50_000,            # Evaluate every N steps (PPO)
+        "metrics": [
+            "sharpe",                    # Sharpe ratio
+            "calmar",                    # Calmar ratio
+            "maxdd",                     # Maximum drawdown
+            "sortino",                   # Sortino ratio
+            "win_rate",                  # Win rate
+            "profit_factor",             # Profit factor
+        ],
+        "early_stop_metric": "calmar",   # Metric for early stopping
+        "early_stop_patience": 5,        # Patience for early stopping
+        "save_best_only": True,          # Only save best model
+        "test_size": 0.2,                # Test set size (validation)
+        "walk_forward": True,            # Walk-forward validation
+        "walk_forward_window": 180,      # Days per window
+    },
+
+    # ============================================
+    # TRAINING SETTINGS
+    # ============================================
+    "seed": 42,                          # Random seed (reproducibility)
+    "mixed_precision": True,             # AMP (faster GPU training)
+    "num_workers": 4,                    # DataLoader workers
+    "pin_memory": True,                  # Pin memory for faster GPU transfer
+    "verbose": 1,                        # Logging verbosity (0-2)
 }
 
 # ============================================
@@ -94,7 +225,7 @@ def find_data_files(data_dir: str) -> Dict[str, List[str]]:
 
 
 def train_model(model_type: str, data_files: List[str], output_name: str,
-                epochs: int, device: str) -> Dict:
+                epochs: int, device: str, hyperparams: Dict) -> Dict:
     """
     Train a single model
 
@@ -102,8 +233,9 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
         model_type: 'ppo', 'ensemble', or 'lstm'
         data_files: List of parquet file paths
         output_name: Output model name (e.g., 'spot_1h_ppo')
-        epochs: Number of training epochs
+        epochs: Number of training epochs (model-specific)
         device: 'cuda' or 'cpu'
+        hyperparams: Model-specific hyperparameters from CONFIGS
 
     Returns:
         dict with status and metrics
@@ -114,8 +246,20 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
     print(f"🎓 Training {model_type.upper()}: {output_name}")
     print(f"{'='*80}")
     print(f"📊 Data files: {len(data_files)}")
-    print(f"⚙️  Epochs: {epochs}")
+    print(f"⚙️  Epochs/Steps: {epochs}")
     print(f"🖥️  Device: {device}")
+
+    # Print key hyperparameters
+    if model_type == "ppo":
+        print(f"🎯 Total timesteps: {hyperparams.get('total_timesteps', '?'):,}")
+        print(f"🎯 Batch size: {hyperparams.get('batch_size', '?')}")
+        print(f"🎯 Learning rate: {hyperparams.get('learning_rate', '?')}")
+    elif model_type == "lstm":
+        print(f"🎯 Sequence length: {hyperparams.get('seq_len', '?')}")
+        print(f"🎯 Hidden size: {hyperparams.get('hidden_size', '?')}")
+    elif model_type == "ensemble":
+        print(f"🎯 Models: {', '.join(hyperparams.get('models', []))}")
+        print(f"🎯 N estimators: {hyperparams.get('lightgbm', {}).get('n_estimators', '?')}")
 
     # Select training script based on model type
     if model_type == "ppo":
@@ -127,16 +271,30 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
     else:
         return {"status": "error", "error": f"Unknown model type: {model_type}"}
 
+    # Save hyperparameters to temp JSON file
+    hyperparams_file = Path(CONFIGS['output_dir']) / f"{output_name}_hyperparams.json"
+    hyperparams_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(hyperparams_file, 'w') as f:
+        json.dump(hyperparams, f, indent=2)
+
     # Build command
-    # Note: These scripts need to be updated to accept multiple data files
-    # For now, we'll use the first file or combine them
     cmd = [
         "python", script,
         "--data-files", ",".join(data_files),
         "--epochs", str(epochs),
         "--device", device,
         "--output-name", output_name,
+        "--hyperparams", str(hyperparams_file),  # Pass hyperparams file
+        "--seed", str(CONFIGS.get('seed', 42)),
     ]
+
+    # Add evaluation config if available
+    if 'evaluation' in CONFIGS:
+        eval_config_file = Path(CONFIGS['output_dir']) / f"{output_name}_eval_config.json"
+        with open(eval_config_file, 'w') as f:
+            json.dump(CONFIGS['evaluation'], f, indent=2)
+        cmd.extend(["--eval-config", str(eval_config_file)])
 
     try:
         result = subprocess.run(
@@ -292,6 +450,7 @@ def main():
             output_name=output_name,
             epochs=epochs,
             device=CONFIGS['device'],
+            hyperparams=CONFIGS[task['model_type']],  # Pass model-specific hyperparams
         )
 
         results.append(result)
