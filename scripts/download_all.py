@@ -122,10 +122,10 @@ def run_download(symbols: List[str], timeframe: str, market: str,
             universal_newlines=True
         )
 
-        # Stream output in real-time
+        # Stream output in real-time with flush
         output_lines = []
         for line in process.stdout:
-            print(line, end='')  # Print immediately
+            print(line, end='', flush=True)  # Print immediately with flush
             output_lines.append(line)
 
         # Wait for completion

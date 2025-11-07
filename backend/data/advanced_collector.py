@@ -122,7 +122,8 @@ class AdvancedDataCollector:
         log_interval = max(5000, estimated_candles // 20)  # Log every 5% or 5000 candles
         start_fetch_time = time.time()
 
-        logger.info(f"      📥 {self.symbol}: Starting download (~{estimated_candles:,} candles estimated)...")
+        # Use print + flush for immediate output (logger is buffered)
+        print(f"      📥 {self.symbol}: Starting download (~{estimated_candles:,} candles estimated)...", flush=True)
 
         while current_start < end_time:
             params = {
@@ -144,12 +145,12 @@ class AdvancedDataCollector:
 
                 all_data.extend(data)
 
-                # Update progress (log every interval)
+                # Update progress (print + flush for immediate visibility)
                 if len(all_data) - last_log_count >= log_interval:
                     percent = (len(all_data) / estimated_candles * 100) if estimated_candles > 0 else 0
                     elapsed = time.time() - start_fetch_time
                     rate = len(all_data) / elapsed if elapsed > 0 else 0
-                    logger.info(f"         ⏳ {len(all_data):,}/{estimated_candles:,} candles ({percent:.1f}%) [{rate:.1f} candles/s]")
+                    print(f"         ⏳ {len(all_data):,}/{estimated_candles:,} candles ({percent:.1f}%) [{rate:.1f} candles/s]", flush=True)
                     last_log_count = len(all_data)
 
                 # Move to next batch (last candle timestamp + 1ms)
@@ -167,11 +168,11 @@ class AdvancedDataCollector:
                 logger.warning(f"OHLCV fetch error at {current_start}: {e}")
                 break
 
-        # Final progress log
+        # Final progress (print + flush)
         if all_data:
             elapsed = time.time() - start_fetch_time
             rate = len(all_data) / elapsed if elapsed > 0 else 0
-            logger.info(f"         ✅ {len(all_data):,} candles complete! [{elapsed:.1f}s, {rate:.1f} candles/s]")
+            print(f"         ✅ {len(all_data):,} candles complete! [{elapsed:.1f}s, {rate:.1f} candles/s]", flush=True)
 
         if not all_data:
             return pd.DataFrame()
