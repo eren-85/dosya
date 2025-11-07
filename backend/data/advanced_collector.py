@@ -548,9 +548,16 @@ class AdvancedDataCollector:
     def fetch_order_book_snapshot(self) -> Dict:
         """
         Fetch current Order Book snapshot
-        Returns: imbalance, spread, microprice, depth5, depth10
+        Returns 11 metrics (ML-ready schema):
+        - best_bid, best_ask, spread, microprice
+        - ob_depth5_bid, ob_depth5_ask, ob_depth10_bid, ob_depth10_ask
+        - ob_imbalance, ob_ts, ob_source
         """
-        url = f"{self.BINANCE_BASE}/fapi/v1/depth"
+        # Market-aware URL
+        if self.market == 'futures':
+            url = f"{self.BINANCE_BASE}/fapi/v1/depth"
+        else:  # spot
+            url = "https://api.binance.com/api/v3/depth"
 
         params = {
             'symbol': self.symbol,
@@ -562,6 +569,7 @@ class AdvancedDataCollector:
             response.raise_for_status()
 
             data = response.json()
+            now_ts_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
             bids = pd.DataFrame(data['bids'], columns=['price', 'qty']).astype(float)
             asks = pd.DataFrame(data['asks'], columns=['price', 'qty']).astype(float)
@@ -571,33 +579,34 @@ class AdvancedDataCollector:
 
             # Spread
             spread = best_ask - best_bid
-            spread_bps = (spread / best_bid) * 10000
 
-            # Microprice
+            # Microprice (volume-weighted mid)
             bid_qty = bids.iloc[0]['qty']
             ask_qty = asks.iloc[0]['qty']
             microprice = (best_bid * ask_qty + best_ask * bid_qty) / (bid_qty + ask_qty)
 
-            # Depth
-            depth5_bid = bids.head(5)['qty'].sum()
-            depth5_ask = asks.head(5)['qty'].sum()
-            depth10_bid = bids.head(10)['qty'].sum()
-            depth10_ask = asks.head(10)['qty'].sum()
+            # Depth (separate bid/ask for ML features)
+            ob_depth5_bid = bids.head(5)['qty'].sum()
+            ob_depth5_ask = asks.head(5)['qty'].sum()
+            ob_depth10_bid = bids.head(10)['qty'].sum()
+            ob_depth10_ask = asks.head(10)['qty'].sum()
 
-            # Imbalance
-            imbalance_5 = (depth5_bid - depth5_ask) / (depth5_bid + depth5_ask)
-            imbalance_10 = (depth10_bid - depth10_ask) / (depth10_bid + depth10_ask)
+            # Imbalance (using depth10)
+            denom = ob_depth10_bid + ob_depth10_ask
+            ob_imbalance = (ob_depth10_bid - ob_depth10_ask) / denom if denom > 0 else 0.0
 
             return {
                 'best_bid': best_bid,
                 'best_ask': best_ask,
-                'mid': (best_bid + best_ask) / 2,
                 'spread': spread,
-                'spread_bps': spread_bps,
                 'microprice': microprice,
-                'depth5': depth5_bid + depth5_ask,
-                'depth10': depth10_bid + depth10_ask,
-                'ob_imbalance': imbalance_10
+                'ob_depth5_bid': ob_depth5_bid,
+                'ob_depth5_ask': ob_depth5_ask,
+                'ob_depth10_bid': ob_depth10_bid,
+                'ob_depth10_ask': ob_depth10_ask,
+                'ob_imbalance': ob_imbalance,
+                'ob_ts': now_ts_ms,
+                'ob_source': 'binance'
             }
 
         except Exception as e:
