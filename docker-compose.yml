@@ -41,6 +41,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./data:/app/data
+      - ./scripts:/app/scripts  # Batch training and download scripts
       - ./backend/models:/app/backend/models  # Trained models persist
     depends_on:
       - postgres
@@ -73,6 +74,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./data:/app/data
+      - ./scripts:/app/scripts
     depends_on:
       - redis
       - backend
@@ -95,6 +97,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./data:/app/data
+      - ./scripts:/app/scripts
     depends_on:
       - redis
       - backend
@@ -117,6 +120,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./data:/app/data
+      - ./scripts:/app/scripts
     depends_on:
       - redis
       - backend
