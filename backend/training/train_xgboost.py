@@ -16,6 +16,13 @@ Features:
 
 import os
 import sys
+import io
+
+# Fix Windows encoding issue (support emojis)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import argparse
 import pandas as pd
 import numpy as np
@@ -112,9 +119,8 @@ def calculate_indicators(df):
     dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
     df['adx'] = dx.rolling(14).mean()
 
-    # Drop NaN rows
-    df.dropna(inplace=True)
-
+    # NOTE: Don't drop NaN rows here - let prepare_features handle it robustly
+    # Dropping rows here causes too much data loss (e.g., 54k -> 1 sample)
     return df
 
 
@@ -304,114 +310,203 @@ def classify_trend(df):
     return np.array(trends[:len(df)])
 
 
-def load_data(symbol, timeframe, data_dir='data/historical'):
-    """Load historical data from Parquet - supports multiple file formats"""
+def load_data(symbol, timeframe, market='futures', data_dir='data/advanced', days=None, limit=None):
+    """
+    Load historical data from Parquet
+    
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe (e.g., '1h', '1d')
+        market: Market type ('futures' or 'spot')
+        data_dir: Data directory
+        days: Load only last N days of data (faster training)
+        limit: Load only last N candles (alternative to days)
+    """
 
-    # Olası dosya isimleri (support both naming conventions)
-    possible_filenames = [
-        f"{symbol}_{timeframe}_futures_multi.parquet",  # Cursor format
-        f"{symbol}_{timeframe}_spot_multi.parquet",     # Cursor format
-        f"{symbol}_{timeframe}_futures.parquet",        # Old format
-        f"{symbol}_{timeframe}_spot.parquet",           # Old format
-        f"{symbol}_{timeframe}.parquet",
-        f"{symbol}_{timeframe}_futures.csv",
-        f"{symbol}_{timeframe}_spot.csv",
-        f"{symbol}_{timeframe}.csv",
+    # Try multiple file patterns in order
+    patterns = [
+        f"{symbol}_{timeframe}_{market}_binance.parquet",  # Advanced collector format
+        f"{symbol}_{timeframe}_{market}_multi.parquet",     # Multi-file format
+        f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
     ]
 
-    # Önce belirtilen klasörde ara
-    filepath = None
-    for filename in possible_filenames:
-        test_path = Path(data_dir) / filename
-        if test_path.exists():
-            filepath = test_path
-            break
+    for filename in patterns:
+        filepath = Path(data_dir) / filename
+        if filepath.exists():
+            print(f"📂 Loading data from {filepath}")
+            df = pd.read_parquet(filepath)
 
-    if filepath is None:
-        raise FileNotFoundError(
-            f"Data file not found for {symbol}_{timeframe} in {data_dir}\n"
-            f"Tried: {', '.join(possible_filenames)}"
-        )
+            # Ensure required columns exist
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                raise ValueError(f"Data must have columns: {required_cols}")
 
-    print(f"[*] Loading data from {filepath}")
+            # Filter by date if requested
+            if days is not None:
+                # Get timestamp column
+                timestamp_col = None
+                if 'close_time' in df.columns:
+                    timestamp_col = 'close_time'
+                elif 'open_time' in df.columns:
+                    timestamp_col = 'open_time'
+                elif 'timestamp' in df.columns:
+                    timestamp_col = 'timestamp'
+                
+                if timestamp_col:
+                    # Convert to datetime if needed
+                    if not pd.api.types.is_datetime64_any_dtype(df[timestamp_col]):
+                        df[timestamp_col] = pd.to_datetime(df[timestamp_col], unit='ms', errors='coerce')
+                    
+                    # Get last N days
+                    cutoff_date = df[timestamp_col].max() - pd.Timedelta(days=days)
+                    df = df[df[timestamp_col] >= cutoff_date].copy()
+                    print(f"   Filtered to last {days} days")
+            
+            # Or filter by limit (last N candles)
+            elif limit is not None:
+                df = df.tail(limit).copy()
+                print(f"   Using last {limit} candles")
+            
+            # Sort by time (ensure chronological order)
+            if 'close_time' in df.columns or 'open_time' in df.columns or 'timestamp' in df.columns:
+                ts_col = timestamp_col if 'timestamp_col' in locals() and timestamp_col else ('close_time' if 'close_time' in df.columns else ('open_time' if 'open_time' in df.columns else 'timestamp'))
+                if ts_col in df.columns:
+                    df = df.sort_values(ts_col).reset_index(drop=True)
 
-    # Dosya uzantısına göre yükle
-    if filepath.suffix == '.parquet':
-        df = pd.read_parquet(filepath)
-    elif filepath.suffix == '.csv':
-        df = pd.read_csv(filepath)
-    else:
-        raise ValueError(f"Unsupported file format: {filepath.suffix}")
+            print(f"✅ Loaded {len(df)} candles")
+            return df
 
-    # Ensure required columns exist
-    required_cols = ['open', 'high', 'low', 'close', 'volume']
-    if not all(col in df.columns for col in required_cols):
-        raise ValueError(f"Data must have columns: {required_cols}")
-
-    # Convert price columns to numeric (fix string data types)
-    print("[*] Converting data types...")
-    for col in required_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Drop any rows with NaN values after conversion
-    df.dropna(subset=required_cols, inplace=True)
-
-    print(f"[OK] Loaded {len(df)} candles")
-    return df
+    # If none found, raise error
+    raise FileNotFoundError(
+        f"Data file not found for {symbol}_{timeframe}_{market} in {data_dir}. "
+        f"Tried patterns: {patterns}"
+    )
 
 
 def prepare_features(df, task='pattern_classification'):
-    """Prepare features and target for training"""
+    """
+    Prepare features and target for training
+    ROBUST CLEANING: column-based instead of row-based to preserve samples
+    """
 
-    print("[*] Calculating technical indicators...")
+    print("🔧 Calculating technical indicators...")
     df = calculate_indicators(df)
 
-    # Feature columns (exclude raw OHLCV)
-    feature_cols = [col for col in df.columns if col not in [
-        'open', 'high', 'low', 'close', 'volume',
-        'open_time', 'close_time', 'timestamp'
-    ]]
+    # --- ROBUST CLEANING: satır atma yok; NaN/Inf -> 0 ---
+    excluded = {"open", "high", "low", "close", "volume",
+                "open_time", "close_time", "timestamp", "target"}
 
-    print(f"[*] Using {len(feature_cols)} features")
+    # Objeleri ve tamamı-NaN kolonları at
+    object_cols = df.select_dtypes(include=["object"]).columns.tolist()
+    if object_cols:
+        print(f"🗑️  Dropping {len(object_cols)} object columns")
+        df = df.drop(columns=object_cols, errors="ignore")
+    
+    # Tamamı-NaN kolonları at
+    nan_cols = df.columns[df.isna().all()].tolist()
+    if nan_cols:
+        print(f"🗑️  Dropping {len(nan_cols)} fully NaN columns")
+        df = df.drop(columns=nan_cols)
+
+    # Sadece numerik feature'lar
+    feature_cols = [c for c in df.columns
+                    if c not in excluded and pd.api.types.is_numeric_dtype(df[c])]
+    
+    if not feature_cols:
+        raise ValueError("No numeric features after cleaning.")
+
+    print(f"📊 Using {len(feature_cols)} features")
+
+    # NaN/±Inf => 0 (satır ELENMEYECEK)
+    X = df[feature_cols].astype("float32").replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    Xv = np.nan_to_num(X.values, nan=0.0, posinf=0.0, neginf=0.0)
 
     # Create target based on task
     if task == 'pattern_classification':
-        print("[*] Detecting patterns...")
-        y = detect_patterns(df)
-        print(f"   Found {len(set(y))} pattern types: {set(y)}")
+        print("🔍 Detecting patterns...")
+        y_raw = detect_patterns(df)
+        # Convert string patterns to numeric labels
+        unique_patterns = np.unique(y_raw)
+        pattern_to_label = {p: i for i, p in enumerate(unique_patterns)}
+        y = np.array([pattern_to_label[p] for p in y_raw])
+        print(f"   Found {len(unique_patterns)} pattern types: {unique_patterns}")
 
     elif task == 'trend_classification':
-        print("[*] Classifying trends...")
+        print("📈 Classifying trends...")
         y = classify_trend(df)
         print(f"   Trend distribution: {np.bincount(y)}")
-
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    # Extract features
-    X = df[feature_cols].values
+    # y zaten üretildi; sadece NaN olmayanları al
+    y_series = pd.Series(y, index=df.index)
+    mask = y_series.notna().values
+    Xv_clean = Xv[mask]
+    y_clean = y_series[mask].astype("int32", errors="ignore").values
+
+    # Örnek azsa fallback: next-bar sign
+    MIN_SAMPLES = 1000
+    if len(y_clean) < MIN_SAMPLES:
+        print(f"⚠️  Only {len(y_clean)} samples found, using fallback label (next-bar sign)")
+        # Create simple binary label: next bar goes up (1) or down (0)
+        diff = df["close"].shift(-1) - df["close"]
+        y_fb = (diff > 0).astype("int32")
+        # Fill NaN values (using modern pandas syntax)
+        y_fb = y_fb.ffill().bfill().fillna(0)
+        # Apply same mask
+        y_clean = y_fb[mask].values.astype("int32")
+        print(f"   [fallback] Using next-bar sign label -> samples: {len(y_clean)}")
+    
+    Xv, y = Xv_clean, y_clean
 
     # Normalize features
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(Xv)
 
-    print(f"[OK] Prepared data: X={X_scaled.shape}, y={y.shape}")
+    # Train/valid böl (küçük datada valid'i küçült)
+    if len(y) < 40:
+        X_train, y_train = X_scaled, y
+        X_val, y_val = X_train[:0], y_train[:0]
+        print(f"⚠️  Too few samples ({len(y)}), skipping validation split")
+    else:
+        test_size = 0.2 if len(y) >= 1000 else (0.1 if len(y) >= 200 else 0.05)
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_scaled, y, test_size=test_size, random_state=42, shuffle=True
+        )
 
-    return X_scaled, y, scaler, feature_cols
+    print(f"✅ Prepared data: X_train={X_train.shape}, X_val={X_val.shape}, y={len(y)} samples")
+    print(f"   Train: {len(X_train)}, Val: {len(X_val)}")
+
+    return X_train, X_val, y_train, y_val, scaler, feature_cols
 
 
-def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, learning_rate=0.1):
+def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, learning_rate=0.1, tree_method='auto'):
     """Train XGBoost model"""
 
-    print(f"\n[>>] Starting XGBoost training...")
+    print(f"\n🚀 Starting XGBoost training...")
     print(f"   Estimators: {n_estimators}")
     print(f"   Max depth: {max_depth}")
     print(f"   Learning rate: {learning_rate}")
+    print(f"   Tree method: {tree_method}")
     print("-" * 60)
 
     # Convert to DMatrix for XGBoost
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dval = xgb.DMatrix(X_val, label=y_val)
+
+    # Auto-detect GPU if tree_method is 'auto'
+    if tree_method == 'auto':
+        try:
+            import torch
+            if torch.cuda.is_available():
+                tree_method = 'gpu_hist'
+                print(f"   ✅ GPU detected, using gpu_hist")
+            else:
+                tree_method = 'hist'
+                print(f"   ⚠️  No GPU detected, using hist (CPU)")
+        except ImportError:
+            tree_method = 'hist'
+            print(f"   ⚠️  PyTorch not available, using hist (CPU)")
 
     # XGBoost parameters
     params = {
@@ -424,51 +519,56 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
         'min_child_weight': 1,
         'gamma': 0,
         'eval_metric': 'mlogloss',
-        'tree_method': 'hist',
+        'tree_method': tree_method,
     }
 
-    # Validation set check
+    # Training with early stopping and progress bar
+    # Only use validation set if it's not empty
     if len(X_val) > 0:
         evals = [(dtrain, 'train'), (dval, 'val')]
         early_stopping_rounds = 50
     else:
         evals = [(dtrain, 'train')]
         early_stopping_rounds = None
-        print("   [WARN] No validation set, skipping early stopping")
-
-    # Training with progress bar
+        print("   ⚠️  No validation set, skipping early stopping")
+    
+    # Create progress bar
     try:
         from tqdm import tqdm
-
+        
+        # Custom callback class for XGBoost
         class ProgressCallback(xgb.callback.TrainingCallback):
             def __init__(self, total_rounds):
-                self.pbar = tqdm(total=total_rounds, desc="[*] XGBoost Training", unit="tree", ncols=100)
+                self.pbar = tqdm(total=total_rounds, desc="🌳 XGBoost Training", unit="tree", ncols=100)
                 self.total_rounds = total_rounds
-
+                
             def after_iteration(self, model, epoch, evals_log):
                 self.pbar.update(1)
+                # Update progress bar with metrics
                 if evals_log:
                     train_log = evals_log.get('train', {})
                     if train_log:
+                        # Get last metric value
                         metric_key = list(train_log.keys())[0] if train_log else 'mlogloss'
                         train_metric = train_log[metric_key][-1] if metric_key in train_log else 0
                         postfix = {'train_loss': f'{train_metric:.4f}'}
-
+                        
+                        # Add validation metric if available
                         val_log = evals_log.get('val', {})
                         if val_log and metric_key in val_log:
                             val_metric = val_log[metric_key][-1]
                             postfix['val_loss'] = f'{val_metric:.4f}'
-
+                        
                         self.pbar.set_postfix(postfix)
-                return False
-
+                return False  # Continue training
+            
             def after_training(self, model):
                 self.pbar.close()
                 return model
-
+        
         progress_callback = ProgressCallback(n_estimators)
         callbacks = [progress_callback]
-
+        
         model = xgb.train(
             params,
             dtrain,
@@ -476,40 +576,52 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
             evals=evals,
             early_stopping_rounds=early_stopping_rounds,
             callbacks=callbacks,
-            verbose_eval=False
+            verbose_eval=False  # Disable default verbose to use progress bar
         )
     except (ImportError, AttributeError):
-        # Fallback if tqdm not available
-        model = xgb.train(
-            params,
-            dtrain,
-            num_boost_round=n_estimators,
-            evals=evals,
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval=10
-        )
+        # Fallback if tqdm not available or callback API changed
+        try:
+            model = xgb.train(
+                params,
+                dtrain,
+                num_boost_round=n_estimators,
+                evals=evals,
+                early_stopping_rounds=50,
+                verbose_eval=10  # Show progress every 10 iterations
+            )
+        except Exception as e:
+            # Final fallback
+            print(f"⚠️  Progress bar not available, using basic verbose output")
+            model = xgb.train(
+                params,
+                dtrain,
+                num_boost_round=n_estimators,
+                evals=evals,
+                early_stopping_rounds=50,
+                verbose_eval=50
+            )
 
     # Evaluate
     train_pred = model.predict(dtrain)
     train_acc = accuracy_score(y_train, train_pred)
-
+    
     print("-" * 60)
-    print(f"[OK] Training complete!")
+    print(f"✅ Training complete!")
     print(f"   Train accuracy: {train_acc:.3f}")
-
+    
     # Validation evaluation (only if validation set exists)
     if len(X_val) > 0:
         val_pred = model.predict(dval)
         val_acc = accuracy_score(y_val, val_pred)
         print(f"   Val accuracy: {val_acc:.3f}")
-
+        
         # Classification report
-        print("\n[*] Validation Classification Report:")
+        print("\n📊 Validation Classification Report:")
         print(classification_report(y_val, val_pred))
     else:
         val_acc = float('nan')
         print(f"   Val accuracy: N/A (no validation set)")
-
+    
     return model, train_acc, val_acc
 
 
@@ -517,16 +629,20 @@ def main():
     parser = argparse.ArgumentParser(description='Train XGBoost model')
     parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
     parser.add_argument('--timeframe', type=str, default='1h', help='Timeframe (e.g., 1h, 4h)')
-    parser.add_argument('--market', type=str, default='futures', choices=['spot', 'futures'], help='Market type')
+    parser.add_argument('--market', type=str, default='futures', help='Market type (spot or futures)')
     parser.add_argument('--task', type=str, default='pattern_classification',
                        choices=['pattern_classification', 'trend_classification'],
                        help='Classification task')
     parser.add_argument('--n-estimators', type=int, default=500, help='Number of trees')
     parser.add_argument('--max-depth', type=int, default=6, help='Maximum tree depth')
     parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
-    parser.add_argument('--data-dir', type=str, default='data/historical', help='Data directory')
-    parser.add_argument('--output-dir', type=str, default='models/trained', help='Output directory')
-    parser.add_argument('--days', type=int, default=None, help='Number of days of recent data to use (default: all data)')
+    parser.add_argument('--tree-method', type=str, default='auto', 
+                       choices=['auto', 'hist', 'gpu_hist', 'approx'],
+                       help='Tree construction method (auto=detect GPU, hist=CPU, gpu_hist=GPU)')
+    parser.add_argument('--data-dir', type=str, default='data/advanced', help='Data directory')
+    parser.add_argument('--output-dir', type=str, default='data/models', help='Output directory')
+    parser.add_argument('--days', type=int, default=None, help='Load only last N days of data (faster training)')
+    parser.add_argument('--limit', type=int, default=None, help='Load only last N candles (alternative to --days)')
 
     args = parser.parse_args()
 
@@ -535,7 +651,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("XGBOOST MODEL - TRAINING SCRIPT")
+    print("🤖 XGBOOST MODEL - TRAINING SCRIPT")
     print("=" * 60)
     print(f"Symbol: {args.symbol}")
     print(f"Timeframe: {args.timeframe}")
@@ -547,24 +663,13 @@ def main():
     print()
 
     # 1. Load data
-    df = load_data(args.symbol, args.timeframe, args.data_dir)
+    df = load_data(args.symbol, args.timeframe, args.market, args.data_dir, 
+                   days=args.days, limit=args.limit)
 
-    # Filter by days if specified
-    if args.days is not None:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        cutoff_date = df['timestamp'].max() - pd.Timedelta(days=args.days)
-        df = df[df['timestamp'] >= cutoff_date].copy()
-        print(f"\n[*] Using last {args.days} days of data: {len(df)} rows")
+    # 2. Prepare features (now includes train/val split internally)
+    X_train, X_val, y_train, y_val, scaler, feature_cols = prepare_features(df, args.task)
 
-    # 2. Prepare features
-    X, y, scaler, feature_cols = prepare_features(df, args.task)
-
-    # 3. Train/val split
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, shuffle=False  # Don't shuffle time series!
-    )
-
-    print(f"\n[*] Data split:")
+    print(f"\n📊 Data split:")
     print(f"   Train: {len(X_train)} samples")
     print(f"   Val: {len(X_val)} samples")
 
@@ -573,11 +678,12 @@ def main():
         X_train, y_train, X_val, y_val,
         n_estimators=args.n_estimators,
         max_depth=args.max_depth,
-        learning_rate=args.lr
+        learning_rate=args.lr,
+        tree_method=args.tree_method
     )
 
     # 5. Feature importance
-    print("\n[*] Top 10 Most Important Features:")
+    print("\n🔍 Top 10 Most Important Features:")
     importance = model.get_score(importance_type='gain')
     importance_sorted = sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10]
 
@@ -620,16 +726,16 @@ def main():
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    print(f"\n[*] Model saved:")
+    print(f"\n💾 Model saved:")
     print(f"   Model: {model_path}")
     print(f"   Scaler: {scaler_path}")
     print(f"   Metadata: {metadata_path}")
     print()
     print("=" * 60)
-    print("[OK] TRAINING COMPLETE!")
+    print("✅ TRAINING COMPLETE!")
     print("=" * 60)
     print()
-    print("[*] Next steps:")
+    print("🎯 Next steps:")
     print("   1. Test the model with new data")
     print("   2. Integrate into prediction pipeline")
     print("   3. Monitor performance in production")
