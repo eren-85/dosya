@@ -93,11 +93,13 @@ class MultiModalTradingEnvironment(gym.Env):
         # Add Ensemble predictions
         self._add_ensemble_predictions()
 
-        # Feature columns
-        self.feature_cols = [col for col in self.df.columns if col not in [
-            'open', 'high', 'low', 'close', 'volume',
-            'open_time', 'close_time', 'timestamp', 'target'
-        ]]
+        # Feature columns - only numeric columns
+        excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+        self.feature_cols = [
+            col for col in self.df.columns
+            if col not in excluded_cols
+            and pd.api.types.is_numeric_dtype(self.df[col])
+        ]
 
         # Normalize features
         self.feature_means = self.df[self.feature_cols].mean()

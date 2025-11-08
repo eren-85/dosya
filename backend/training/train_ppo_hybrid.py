@@ -86,11 +86,13 @@ class HybridTradingEnvironment(gym.Env):
         # Add Ensemble predictions to dataframe
         self._add_ensemble_predictions()
 
-        # Feature columns (including Ensemble predictions)
-        self.feature_cols = [col for col in self.df.columns if col not in [
-            'open', 'high', 'low', 'close', 'volume',
-            'open_time', 'close_time', 'timestamp', 'target'
-        ]]
+        # Feature columns (including Ensemble predictions) - only numeric columns
+        excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+        self.feature_cols = [
+            col for col in self.df.columns
+            if col not in excluded_cols
+            and pd.api.types.is_numeric_dtype(self.df[col])
+        ]
 
         # Normalize features
         self.feature_means = self.df[self.feature_cols].mean()

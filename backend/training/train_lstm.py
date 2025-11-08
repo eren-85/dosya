@@ -169,11 +169,13 @@ def prepare_features(df, seq_length=60):
     print("🔧 Calculating technical indicators...")
     df = calculate_indicators(df)
 
-    # Feature columns (exclude raw OHLCV, keep only indicators)
-    feature_cols = [col for col in df.columns if col not in [
-        'open', 'high', 'low', 'close', 'volume',
-        'open_time', 'close_time', 'timestamp'
-    ]]
+    # Feature columns (exclude raw OHLCV, keep only numeric indicators)
+    excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+    feature_cols = [
+        col for col in df.columns
+        if col not in excluded_cols
+        and pd.api.types.is_numeric_dtype(df[col])
+    ]
 
     print(f"📊 Using {len(feature_cols)} features: {feature_cols[:5]}... (showing first 5)")
 

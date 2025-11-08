@@ -75,16 +75,18 @@ class TradingEnvironment(gym.Env):
         # Calculate indicators
         self._calculate_indicators()
 
-        # Feature columns
-        self.feature_cols = [col for col in self.df.columns if col not in [
-            'open', 'high', 'low', 'close', 'volume',
-            'open_time', 'close_time', 'timestamp'
-        ]]
+        # Feature columns - only numeric columns
+        excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+        self.feature_cols = [
+            col for col in self.df.columns
+            if col not in excluded_cols
+            and pd.api.types.is_numeric_dtype(self.df[col])
+        ]
 
         # Normalize features
         self.feature_means = self.df[self.feature_cols].mean()
         self.feature_stds = self.df[self.feature_cols].std()
-        self.df[self.feature_cols] = (self.df[self.feature_cols] - self.feature_means) / self.feature_stds
+        self.df[self.feature_cols] = (self.df[self.feature_cols] - self.feature_means) / (self.feature_stds + 1e-8)
 
         # State space: features + position + equity
         n_features = len(self.feature_cols) + 2
