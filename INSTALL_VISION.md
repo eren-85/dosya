@@ -31,26 +31,39 @@ python -m pip install -U pip setuptools wheel
 
 ### 3. Install PyTorch with CUDA Support (CRITICAL FIRST STEP)
 
-**For CUDA 12.4:**
+⚠️ **IMPORTANT:** This MUST be done BEFORE installing requirements.txt!
+
+**For CUDA 12.4 (RTX 4060 recommended):**
 ```bash
-pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+# Uninstall any existing PyTorch
+python -m pip uninstall -y torch torchvision torchaudio
+python -m pip cache purge
+
+# Install CUDA version (force GPU version)
+python -m pip install --index-url https://download.pytorch.org/whl/cu124 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 ```
 
 **For CUDA 12.1:**
 ```bash
-pip install --index-url https://download.pytorch.org/whl/cu121 torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+python -m pip uninstall -y torch torchvision torchaudio
+python -m pip cache purge
+python -m pip install --index-url https://download.pytorch.org/whl/cu121 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 ```
 
 **Verify GPU support:**
 ```bash
-python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
 ```
 
 Expected output:
 ```
-CUDA Available: True
-GPU: NVIDIA GeForce RTX 4060
+CUDA: True, GPU: NVIDIA GeForce RTX 4060
 ```
+
+**Why --no-cache-dir and --force-reinstall?**
+- `--no-cache-dir`: Prevents using cached CPU wheel
+- `--force-reinstall`: Ensures CUDA version is installed even if PyTorch exists
+- `--index-url`: Forces download from CUDA-specific repository
 
 ### 4. Install NumPy 2.x Stack (Lock Versions)
 

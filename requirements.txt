@@ -4,23 +4,41 @@
 # Successfully tested on Windows 11 with Python 3.12.3 + RTX 4060
 
 # ============================================================================
-# INSTALLATION NOTES (Windows)
+# INSTALLATION GUIDE (Windows 11 + Python 3.12.3 + RTX 4060)
 # ============================================================================
-# 1) Install PyTorch with CUDA first (REQUIRED for GPU):
-#    pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 #
-# 2) Install core numeric stack to lock NumPy:
-#    pip install numpy==2.2.6 pandas==2.3.3 scipy==1.14.1
+# Step 1: Upgrade pip, setuptools, wheel
+#   python -m pip install -U pip setuptools wheel
 #
-# 3) Install this requirements file:
-#    pip install -r requirements.txt
+# Step 2: Install PyTorch with CUDA (CRITICAL - DO THIS FIRST!)
+#   ⚠️  This MUST be done BEFORE installing requirements.txt!
 #
-# 4) TA-Lib (optional, for advanced indicators):
-#    Download wheel from https://github.com/cgohlke/talib-build/releases
-#    pip install ta_lib-0.6.8-cp312-cp312-win_amd64.whl
+#   For CUDA 12.4 (RTX 4060 recommended):
+#     python -m pip uninstall -y torch torchvision torchaudio
+#     python -m pip cache purge
+#     python -m pip install --index-url https://download.pytorch.org/whl/cu124 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 #
-# 5) Linux-only packages (detectron2) should be installed separately on Linux:
-#    pip install 'git+https://github.com/facebookresearch/detectron2.git'
+#   For CUDA 12.1:
+#     python -m pip install --index-url https://download.pytorch.org/whl/cu121 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+#
+#   Verify GPU support:
+#     python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+#
+#   Expected output:
+#     CUDA: True, GPU: NVIDIA GeForce RTX 4060
+#
+# Step 3: Lock NumPy 2.x stack
+#   python -m pip install numpy==2.2.6 pandas==2.3.3 scipy==1.14.1
+#
+# Step 4: Install requirements.txt (PyTorch already installed, will be skipped)
+#   python -m pip install -r requirements.txt
+#
+# Step 5: (Optional) TA-Lib for advanced indicators
+#   Download wheel from: https://github.com/cgohlke/talib-build/releases
+#   python -m pip install ta_lib-0.6.8-cp312-cp312-win_amd64.whl
+#
+# Step 6: (Linux only) detectron2 for advanced layout analysis
+#   pip install 'git+https://github.com/facebookresearch/detectron2.git'
 #
 # ============================================================================
 
@@ -44,10 +62,24 @@ lightgbm==4.5.0
 catboost==1.2.8        # NumPy 2 support
 
 # ===== DEEP LEARNING (PyTorch) =====
-# IMPORTANT: Install PyTorch with CUDA toolkit FIRST (see installation notes above)
-torch==2.5.1
-torchvision==0.20.1
-torchaudio==2.5.1
+# CRITICAL: PyTorch MUST be installed FIRST with CUDA support!
+# DO NOT install from this file - it will install CPU version!
+#
+# For RTX 4060 (CUDA 12.4):
+#   pip install --index-url https://download.pytorch.org/whl/cu124 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+#
+# For CUDA 12.1:
+#   pip install --index-url https://download.pytorch.org/whl/cu121 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+#
+# Verify GPU support after installation:
+#   python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+#
+# Uncomment ONLY if you want CPU version (NOT recommended for this project):
+# torch==2.5.1
+# torchvision==0.20.1
+# torchaudio==2.5.1
+
+# Transformers & Vision
 transformers==4.46.3
 accelerate==1.1.1
 einops>=0.7.0
