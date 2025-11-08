@@ -391,14 +391,17 @@ def prepare_features(df, task='pattern_classification'):
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    # ROBUST DATA PREPARATION - Fill all NaNs (DO NOT drop rows)
+    # ROBUST DATA PREPARATION - Fill all NaNs AND inf values (DO NOT drop rows)
     df = df.ffill().bfill().fillna(0)
+
+    # Replace inf with 0 (critical - prevents data loss!)
+    df = df.replace([np.inf, -np.inf], 0)
 
     # Extract features (float32 for efficiency)
     X = df[feature_cols].astype('float32')
     y = pd.Series(y).astype('int32')
 
-    # Filter only valid samples (no NaN/inf)
+    # Filter only truly invalid samples (should be minimal now)
     mask = np.isfinite(X.values).all(axis=1) & y.notna().values
     X, y = X[mask], y[mask]
 
@@ -407,10 +410,19 @@ def prepare_features(df, task='pattern_classification'):
     # FALLBACK: If too few samples, use next-bar sign as label
     if len(y) < 200:
         print(f"⚠️  Too few samples ({len(y)}), using fallback: next-bar sign label")
+
+        # Recalculate from full dataframe
         diff = df['close'].shift(-1) - df['close']
         y_fallback = (diff > 0).astype('int32')
-        mask_fallback = y_fallback.notna().values & np.isfinite(X.values).all(axis=1)
-        X, y = X[mask_fallback], y_fallback[mask_fallback]
+
+        # Reextract X from full df (after cleaning)
+        X_full = df[feature_cols].astype('float32')
+
+        # Filter with fallback labels
+        mask_fallback = y_fallback.notna().values & np.isfinite(X_full.values).all(axis=1)
+        X = X_full[mask_fallback]
+        y = y_fallback[mask_fallback]
+
         print(f"   Fallback samples: {len(y)}")
 
     if len(y) < 10:
