@@ -130,11 +130,11 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
     start_time = time.time()
 
     print(f"\n{'='*80}")
-    print(f"🎓 Training {model_type.upper()}: {output_name}")
+    print(f"[*] Training {model_type.upper()}: {output_name}")
     print(f"{'='*80}")
-    print(f"📊 Data files: {len(data_files)}")
-    print(f"⚙️  Epochs/Steps: {epochs}")
-    print(f"🖥️  Device: {device}")
+    print(f"[*] Data files: {len(data_files)}")
+    print(f"[*] Epochs/Steps: {epochs}")
+    print(f"[*] Device: {device}")
 
     # Select wrapper script
     if model_type == "ppo":
@@ -167,7 +167,7 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
     try:
         project_root = Path(__file__).parent.parent
 
-        print(f"\n🚀 Starting training...")
+        print(f"\n[>>] Starting training...")
 
         result = subprocess.run(
             cmd,
@@ -191,7 +191,7 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
         elapsed = time.time() - start_time
 
         if result.returncode == 0:
-            print(f"\n✅ Training complete in {elapsed/60:.1f} minutes")
+            print(f"\n[OK] Training complete in {elapsed/60:.1f} minutes")
             return {
                 "status": "success",
                 "elapsed": elapsed,
@@ -200,7 +200,7 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
             }
         else:
             error_msg = result.stderr[:1000] if result.stderr else "Unknown error"
-            print(f"\n❌ Training failed")
+            print(f"\n[FAIL] Training failed")
             return {
                 "status": "failed",
                 "elapsed": elapsed,
@@ -208,7 +208,7 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
             }
 
     except Exception as e:
-        print(f"\n❌ Error: {str(e)}")
+        print(f"\n[ERROR] {str(e)}")
         return {
             "status": "error",
             "elapsed": time.time() - start_time,
@@ -220,26 +220,26 @@ def main():
     """Main training orchestrator"""
 
     print("\n" + "="*80)
-    print("🎓 MULTI-EVERYTHING MODEL TRAINER")
+    print("MULTI-EVERYTHING MODEL TRAINER")
     print("="*80)
 
     # Find data files
-    print(f"\n📁 Scanning {CONFIGS['data_dir']} for parquet files...")
+    print(f"\n[*] Scanning {CONFIGS['data_dir']} for parquet files...")
 
     timeframes = CONFIGS.get('timeframes')
     markets = CONFIGS.get('markets')
 
     if timeframes:
-        print(f"   ⏱️  Filtering timeframes: {timeframes}")
+        print(f"   [*] Filtering timeframes: {timeframes}")
 
     data_groups = find_data_files(CONFIGS['data_dir'], timeframes, markets)
 
     if not data_groups:
-        print(f"\n❌ No parquet files found in {CONFIGS['data_dir']}")
+        print(f"\n[ERROR] No parquet files found in {CONFIGS['data_dir']}")
         print(f"   Make sure you have files like: BTCUSDT_1d_futures_multi.parquet")
         return False
 
-    print(f"\n✅ Found {len(data_groups)} data groups:")
+    print(f"\n[OK] Found {len(data_groups)} data groups:")
     for group_name, files in data_groups.items():
         print(f"   - {group_name}: {len(files)} files")
 
@@ -253,8 +253,8 @@ def main():
                 'files': files,
             })
 
-    print(f"\n📋 Total training tasks: {len(training_tasks)}")
-    print(f"🖥️  Device: {CONFIGS['device']}")
+    print(f"\n[*] Total training tasks: {len(training_tasks)}")
+    print(f"[*] Device: {CONFIGS['device']}")
 
     for i, task in enumerate(training_tasks, 1):
         print(f"\n   Task {i}: {task['model_type'].upper()} on {task['group_name']} ({len(task['files'])} files)")
@@ -269,16 +269,16 @@ def main():
     try:
         from tqdm import tqdm
         task_pbar = tqdm(enumerate(training_tasks, 1), total=len(training_tasks),
-                        desc="📋 Overall Progress", unit="task", ncols=100)
+                        desc="[*] Overall Progress", unit="task", ncols=100)
     except ImportError:
         task_pbar = enumerate(training_tasks, 1)
 
     for i, task in task_pbar:
         if hasattr(task_pbar, 'set_description'):
-            task_pbar.set_description(f"📋 Task {i}/{len(training_tasks)}: {task['model_type'].upper()} ({task['group_name']})")
+            task_pbar.set_description(f"[*] Task {i}/{len(training_tasks)}: {task['model_type'].upper()} ({task['group_name']})")
 
         print(f"\n{'='*80}")
-        print(f"📊 TASK {i}/{len(training_tasks)}")
+        print(f"[*] TASK {i}/{len(training_tasks)}")
         print(f"{'='*80}")
 
         output_name = f"{task['group_name']}_{task['model_type']}"
@@ -297,7 +297,7 @@ def main():
 
         # Update progress bar
         if hasattr(task_pbar, 'set_postfix'):
-            status_icon = "✅" if result['status'] == 'success' else "❌"
+            status_icon = "[OK]" if result['status'] == 'success' else "[FAIL]"
             task_pbar.set_postfix({
                 'status': status_icon,
                 'time': f"{result['elapsed']/60:.1f}m"
@@ -310,15 +310,15 @@ def main():
     total_elapsed = time.time() - start_time
 
     print("\n" + "="*80)
-    print("📊 TRAINING SUMMARY")
+    print("TRAINING SUMMARY")
     print("="*80)
 
     success_count = sum(1 for r in results if r['status'] == 'success')
     failed_count = len(results) - success_count
 
-    print(f"✅ Success: {success_count}/{len(training_tasks)}")
-    print(f"❌ Failed: {failed_count}/{len(training_tasks)}")
-    print(f"⏱️  Total time: {total_elapsed/60:.1f} minutes")
+    print(f"[OK] Success: {success_count}/{len(training_tasks)}")
+    print(f"[FAIL] Failed: {failed_count}/{len(training_tasks)}")
+    print(f"[*] Total time: {total_elapsed/60:.1f} minutes")
 
     # Save results
     results_file = Path(CONFIGS['output_dir']) / f"training_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -330,9 +330,9 @@ def main():
             'results': results,
         }, f, indent=2)
 
-    print(f"\n💾 Results saved to: {results_file}")
+    print(f"\n[*] Results saved to: {results_file}")
     print(f"\n{'='*80}")
-    print("🎉 TRAINING COMPLETE!")
+    print("TRAINING COMPLETE!")
     print(f"{'='*80}\n")
 
     return success_count == len(training_tasks)
