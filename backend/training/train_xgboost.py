@@ -391,20 +391,42 @@ def prepare_features(df, task='pattern_classification'):
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    # Extract features
-    X = df[feature_cols].values
+    # ROBUST DATA PREPARATION - Fill all NaNs (DO NOT drop rows)
+    df = df.ffill().bfill().fillna(0)
+
+    # Extract features (float32 for efficiency)
+    X = df[feature_cols].astype('float32')
+    y = pd.Series(y).astype('int32')
+
+    # Filter only valid samples (no NaN/inf)
+    mask = np.isfinite(X.values).all(axis=1) & y.notna().values
+    X, y = X[mask], y[mask]
+
+    print(f"📊 After filtering: {len(y)} valid samples")
+
+    # FALLBACK: If too few samples, use next-bar sign as label
+    if len(y) < 200:
+        print(f"⚠️  Too few samples ({len(y)}), using fallback: next-bar sign label")
+        diff = df['close'].shift(-1) - df['close']
+        y_fallback = (diff > 0).astype('int32')
+        mask_fallback = y_fallback.notna().values & np.isfinite(X.values).all(axis=1)
+        X, y = X[mask_fallback], y_fallback[mask_fallback]
+        print(f"   Fallback samples: {len(y)}")
+
+    if len(y) < 10:
+        raise ValueError(f"Insufficient data: only {len(y)} samples after cleaning. Need at least 10.")
 
     # Normalize features
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(X.values)
 
     print(f"✅ Prepared data: X={X_scaled.shape}, y={y.shape}")
 
-    return X_scaled, y, scaler, feature_cols
+    return X_scaled, y.values, scaler, feature_cols
 
 
 def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, learning_rate=0.1):
-    """Train XGBoost model"""
+    """Train XGBoost model (handles empty validation set)"""
 
     print(f"\n🚀 Starting XGBoost training...")
     print(f"   Estimators: {n_estimators}")
@@ -414,7 +436,6 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
 
     # Convert to DMatrix for XGBoost
     dtrain = xgb.DMatrix(X_train, label=y_train)
-    dval = xgb.DMatrix(X_val, label=y_val)
 
     # XGBoost parameters
     params = {
@@ -430,33 +451,45 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
         'tree_method': 'hist',
     }
 
-    # Training with early stopping
-    evals = [(dtrain, 'train'), (dval, 'val')]
+    # Training with or without validation
+    has_validation = len(y_val) > 0
+
+    if has_validation:
+        dval = xgb.DMatrix(X_val, label=y_val)
+        evals = [(dtrain, 'train'), (dval, 'val')]
+        early_stopping_rounds = 50
+    else:
+        evals = [(dtrain, 'train')]
+        early_stopping_rounds = None
 
     model = xgb.train(
         params,
         dtrain,
         num_boost_round=n_estimators,
         evals=evals,
-        early_stopping_rounds=50,
+        early_stopping_rounds=early_stopping_rounds,
         verbose_eval=50
     )
 
     # Evaluate
     train_pred = model.predict(dtrain)
-    val_pred = model.predict(dval)
-
     train_acc = accuracy_score(y_train, train_pred)
-    val_acc = accuracy_score(y_val, val_pred)
+
+    if has_validation:
+        val_pred = model.predict(dval)
+        val_acc = accuracy_score(y_val, val_pred)
+    else:
+        val_acc = 0.0
 
     print("-" * 60)
     print(f"✅ Training complete!")
     print(f"   Train accuracy: {train_acc:.3f}")
-    print(f"   Val accuracy: {val_acc:.3f}")
-
-    # Classification report
-    print("\n📊 Validation Classification Report:")
-    print(classification_report(y_val, val_pred))
+    if has_validation:
+        print(f"   Val accuracy: {val_acc:.3f}")
+        print("\n📊 Validation Classification Report:")
+        print(classification_report(y_val, val_pred))
+    else:
+        print(f"   Val accuracy: N/A (no validation set)")
 
     return model, train_acc, val_acc
 
@@ -473,7 +506,7 @@ def main():
     parser.add_argument('--max-depth', type=int, default=6, help='Maximum tree depth')
     parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--data-dir', type=str, default='data/advanced', help='Data directory')
-    parser.add_argument('--output-dir', type=str, default='models/trained', help='Output directory')
+    parser.add_argument('--output-dir', type=str, default='data/models', help='Output directory')
 
     args = parser.parse_args()
 
@@ -499,14 +532,34 @@ def main():
     # 2. Prepare features
     X, y, scaler, feature_cols = prepare_features(df, args.task)
 
-    # 3. Train/val split
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, shuffle=False  # Don't shuffle time series!
-    )
+    # 3. Train/val split with dynamic test_size
+    n_samples = len(y)
 
-    print(f"\n📊 Data split:")
-    print(f"   Train: {len(X_train)} samples")
-    print(f"   Val: {len(X_val)} samples")
+    # Adjust test_size based on sample count
+    if n_samples >= 1000:
+        test_size = 0.2
+    elif n_samples >= 200:
+        test_size = 0.1
+    elif n_samples >= 40:
+        test_size = 0.05
+    elif n_samples >= 8:
+        test_size = 0.25
+    else:
+        test_size = 0  # Skip validation for very small datasets
+
+    print(f"\n📊 Data split (n={n_samples}, test_size={test_size}):")
+
+    if test_size == 0:
+        # No validation set - use all data for training
+        X_train, y_train = X, y
+        X_val, y_val = X[:0], y[:0]  # Empty validation set
+        print(f"   Train: {len(X_train)} samples (no validation)")
+    else:
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, test_size=test_size, shuffle=False  # Don't shuffle time series!
+        )
+        print(f"   Train: {len(X_train)} samples")
+        print(f"   Val: {len(X_val)} samples")
 
     # 4. Train model
     model, train_acc, val_acc = train_model(
@@ -528,7 +581,8 @@ def main():
 
     # 6. Save model and metadata
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_name = f"xgboost_{args.task}_{args.symbol}_{args.timeframe}_{timestamp}"
+    # Format: BTCUSDT_1h_futures_xgb_20251108_125637 (compatible with hybrid PPO wildcard)
+    model_name = f"{args.symbol}_{args.timeframe}_{args.market}_xgb_{timestamp}"
 
     model_path = output_dir / f"{model_name}.json"
     scaler_path = output_dir / f"{model_name}_scaler.pkl"
