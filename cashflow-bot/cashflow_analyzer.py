@@ -569,13 +569,54 @@ class CashFlowAnalyzer:
             font-weight: 600;
             font-size: 14px;
         }}
+        .info-section {{
+            background: #f8fafc;
+            padding: 30px;
+            border-top: 1px solid #e2e8f0;
+        }}
+        .info-section h3 {{
+            color: #1e293b;
+            font-size: 18px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }}
+        .info-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }}
+        .info-card {{
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }}
+        .info-card h4 {{
+            color: #1e293b;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }}
+        .info-card p {{
+            color: #64748b;
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 0;
+        }}
+        .info-card code {{
+            background: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #1e293b;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>📊 Market Nakit Akışı Raporu</h1>
-            <div class="subtitle">🔴 CANLI VERİ - Binance Spot | {timestamp}</div>
+            <div class="subtitle">🟢 CANLI VERİ - Binance Spot | {timestamp}</div>
         </div>
 
         <div class="metrics">
@@ -666,6 +707,70 @@ class CashFlowAnalyzer:
         html += f"""
                 </tbody>
             </table>
+        </div>
+
+        <div class="info-section">
+            <h3>📖 Metrik Açıklamaları</h3>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h4>🎯 Kısa Vadeli Alım Gücü</h4>
+                    <p>
+                        <strong>Formül:</strong> <code>15m alım % / 1d alım %</code><br><br>
+                        <strong>1.0X</strong> = Normal (15m = 1d)<br>
+                        <strong>&gt;1.0X</strong> = Kısa vadede alım güçleniyor 🔼<br>
+                        <strong>&lt;1.0X</strong> = Kısa vadede alım zayıflıyor 🔻
+                    </p>
+                </div>
+
+                <div class="info-card">
+                    <h4>💰 Nakit Payı (Cash Share)</h4>
+                    <p>
+                        <strong>Formül:</strong> <code>(Coin volume / Total volume) × 100</code><br><br>
+                        Bir coin'in toplam market hacmindeki payı.<br>
+                        Örnek: BTC %35.2 = Toplam paranın %35.2'si BTC'de işlem görüyor.
+                    </p>
+                </div>
+
+                <div class="info-card">
+                    <h4>⚡ MTS (Momentum Score)</h4>
+                    <p>
+                        <strong>Formül:</strong> <code>15m alım % / Ortalama alım %</code><br><br>
+                        <strong>1.0X</strong> = Normal momentum<br>
+                        <strong>1.5X</strong> = %50 daha güçlü alım momentumu 🚀<br>
+                        <strong>0.8X</strong> = %20 daha zayıf momentum
+                    </p>
+                </div>
+
+                <div class="info-card">
+                    <h4>📊 Marketteki Hacim Payı</h4>
+                    <p>
+                        <strong>Formül:</strong> <code>(Top 30 volume / Tüm volume) × 100</code><br><br>
+                        Top 30 coin'in tüm analiz edilen coin'ler içindeki payı.<br>
+                        Genellikle %90-100 arası (büyük coin'ler hacmi domine ediyor).
+                    </p>
+                </div>
+
+                <div class="info-card">
+                    <h4>🔼🔻 Timeframe İndikatörleri</h4>
+                    <p>
+                        <strong>🔼</strong> = Alım baskınlığı (buyer ≥ %50)<br>
+                        <strong>🔻</strong> = Satış baskınlığı (buyer &lt; %50)<br><br>
+                        Örnek: <strong>🔼🔻🔼🔻🔼</strong><br>
+                        15m: Alım | 1h: Satış | 4h: Alım | 12h: Satış | 1d: Alım
+                    </p>
+                </div>
+
+                <div class="info-card">
+                    <h4>🎨 Tooltip Kullanımı</h4>
+                    <p>
+                        <strong>Coin isimlerinin üzerine gelin!</strong><br><br>
+                        Tooltip'te şunları göreceksiniz:<br>
+                        • 24h USD hacim (örn: $45.2B)<br>
+                        • Nakit payı yüzdesi<br>
+                        • Momentum score detayı
+                    </p>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
