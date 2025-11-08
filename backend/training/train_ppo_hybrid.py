@@ -362,7 +362,7 @@ class HybridTradingEnvironment(gym.Env):
 
         # 4. Sharpe ratio bonus
         if len(self.equity_curve) > 30:
-            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-31:-1]) + 1e-8)
+            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-30:-1]) + 1e-8)
             sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
             if sharpe > 2.0:
                 sharpe_bonus = 5

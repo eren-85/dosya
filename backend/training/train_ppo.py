@@ -341,7 +341,7 @@ class TradingEnvironment(gym.Env):
 
         # 4. Sharpe ratio bonus
         if len(self.equity_curve) > 30:
-            returns = np.diff(self.equity_curve[-30:]) / self.equity_curve[-31:-1]
+            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-30:-1]) + 1e-8)
             sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
             if sharpe > 2.0:
                 sharpe_bonus = 5
@@ -531,7 +531,7 @@ def main():
     print(f"   Number of trades: {num_trades}")
 
     # Calculate Sharpe ratio
-    returns = np.diff(val_env.equity_curve) / val_env.equity_curve[:-1]
+    returns = np.diff(val_env.equity_curve) / (np.array(val_env.equity_curve[:-1]) + 1e-8)
     sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
     max_dd = (val_env.max_equity - np.min(val_env.equity_curve)) / val_env.max_equity
 

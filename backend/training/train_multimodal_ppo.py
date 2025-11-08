@@ -404,7 +404,7 @@ class MultiModalTradingEnvironment(gym.Env):
         # Sharpe bonus
         sharpe_bonus = 0
         if len(self.equity_curve) > 30:
-            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-31:-1]) + 1e-8)
+            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-30:-1]) + 1e-8)
             sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
             sharpe_bonus = 5 if sharpe > 2.0 else (2 if sharpe > 1.0 else 0)
 
