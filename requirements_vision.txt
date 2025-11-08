@@ -1,34 +1,20 @@
-# Vision & Multi-Modal Requirements
-# RTX 4060 optimized
+# ============================================================================
+# DEPRECATED: This file is merged into requirements.txt
+# ============================================================================
+#
+# Vision stack requirements are now integrated into the main requirements.txt
+# with environment markers for Windows/Linux compatibility.
+#
+# For installation instructions, see: INSTALL_VISION.md
+#
+# Key changes:
+# - NumPy 2.x ecosystem maintained (2.2.6)
+# - Windows incompatible packages marked with: ; sys_platform != 'win32'
+# - All vision packages (ultralytics, opencv, layoutparser) included
+# - Single unified requirements file for easier maintenance
+#
+# ============================================================================
 
-# VLM (Qwen2.5-VL-7B)
-transformers>=4.40.0
-accelerate>=0.28.0
-bitsandbytes>=0.43.0  # For 4-bit quantization
-einops>=0.7.0
-sentencepiece>=0.2.0
-
-# YOLOv8
-ultralytics>=8.1.0
-opencv-python>=4.9.0
-
-# OCR
-paddleocr>=2.7.0
-paddlepaddle>=2.6.0  # CPU version (GPU optional)
-
-# Layout Analysis
-layoutparser>=0.3.4
-detectron2 @ git+https://github.com/facebookresearch/detectron2.git
-
-# PDF Processing
-pdf2image>=1.17.0
-pypdf2>=3.0.1
-pillow>=10.2.0
-
-# Chart Generation
-mplfinance>=0.12.10
-matplotlib>=3.8.0
-plotly>=5.19.0
-
-# Already in main requirements
-# pandas, numpy, torch
+# Please use: pip install -r requirements.txt
+#
+# This file is kept for reference only.
