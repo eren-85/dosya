@@ -113,7 +113,7 @@ pillow>=10.4.0
 
 # ===== VISUALIZATION / CHARTING =====
 matplotlib>=3.9.0
-mplfinance>=0.12.10
+mplfinance==0.12.10b0  # Beta version (stable 0.12.10 not available on PyPI)
 plotly>=5.24.0
 
 # ===== TECHNICAL ANALYSIS =====
