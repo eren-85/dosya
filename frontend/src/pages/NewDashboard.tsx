@@ -35,7 +35,6 @@ import { MarketType, COMMON_SYMBOLS } from '@/lib/constants';
 import { api, ExtendedAnalysis } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { MarketCashFlow } from '@/components/widgets/MarketCashFlow';
 
 interface CoinData {
   symbol: string;
@@ -510,9 +509,6 @@ export default function NewDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Market Cash Flow - Full Width */}
-      <MarketCashFlow />
     </div>
   );
 }

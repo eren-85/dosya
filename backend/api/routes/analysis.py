@@ -6,7 +6,6 @@ Features:
 - Technical indicator calculation
 - OpenAI-powered insights
 - Multiple symbols and timeframes
-- Market cash flow analysis
 """
 
 from fastapi import APIRouter, HTTPException
@@ -21,14 +20,6 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
-
-# Market Cash Flow Analyzer
-try:
-    from backend.analysis.market_cash_flow import MarketCashFlowAnalyzer
-    from backend.analysis.live_cash_flow import LiveMarketCashFlowAnalyzer
-    CASH_FLOW_AVAILABLE = True
-except ImportError:
-    CASH_FLOW_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -52,16 +43,6 @@ class QuickAnalysisRequest(BaseModel):
     """Quick analysis request"""
     symbol: str = Field(..., examples=["BTCUSDT"])
     question: Optional[str] = Field(None, examples=["Is this a good entry point?"])
-
-
-class CashFlowRequest(BaseModel):
-    """Market cash flow analysis request"""
-    symbols: Optional[List[str]] = Field(None, description="List of symbols (None = auto-select top coins)")
-    timeframe: str = Field("15m", description="Candle timeframe: 15m, 1h, 4h, 12h, 1d")
-    limit: int = Field(500, ge=100, le=1500, description="Number of candles to analyze")
-    top_n: int = Field(30, ge=5, le=50, description="Number of top coins to analyze (if symbols=None)")
-    format: str = Field("json", pattern="^(json|text)$", description="Output format")
-    live: bool = Field(True, description="Use live Binance data (True) or local parquet files (False)")
 
 
 class AnalysisResponse(BaseModel):
@@ -171,82 +152,6 @@ async def analyze(req: AnalyzeRequest):
         "results": results,
         "timestamp": datetime.utcnow().isoformat(),
     }
-
-
-@router.post("/analysis/cash-flow")
-async def cash_flow_analysis(req: CashFlowRequest):
-    """
-    Market-wide cash flow analysis
-
-    Analyzes:
-    - Buyer vs seller percentages across timeframes (15m, 1h, 4h, 12h, 1d)
-    - Cash distribution by coin
-    - Momentum scores
-    - Risk assessment
-
-    Returns:
-    - JSON format: Complete structured data
-    - Text format: Human-readable report (for Telegram/Discord bots)
-
-    Example usage:
-    ```
-    POST /api/analysis/cash-flow
-    {
-        "symbols": null,  # All available symbols
-        "timeframe": "15min",
-        "limit": 500,
-        "format": "text"
-    }
-    ```
-    """
-    logger.info(f"💰 Cash flow analysis request (format={req.format})")
-
-    if not CASH_FLOW_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Market cash flow analyzer not available"
-        )
-
-    try:
-        # Choose analyzer based on live parameter
-        if req.live:
-            # Live data from Binance (recommended for bots)
-            analyzer = LiveMarketCashFlowAnalyzer()
-            report = analyzer.analyze_market(
-                symbols=req.symbols,
-                timeframe=req.timeframe,
-                limit=req.limit,
-                top_n=req.top_n
-            )
-        else:
-            # Local parquet files (requires pre-downloaded data)
-            analyzer = MarketCashFlowAnalyzer(data_dir="data")
-            report = analyzer.analyze_market(
-                symbols=req.symbols,
-                base_timeframe=req.timeframe,
-                limit=req.limit
-            )
-
-        if report.get('status') == 'error':
-            raise HTTPException(status_code=500, detail=report.get('message'))
-
-        # Return text format for bots
-        if req.format == 'text':
-            return {
-                "status": "success",
-                "format": "text",
-                "report": report['text_report'],
-                "timestamp": report['timestamp']
-            }
-
-        # Return full JSON
-        return report
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Cash flow analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/analysis/quick")
