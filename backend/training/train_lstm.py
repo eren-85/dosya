@@ -136,31 +136,35 @@ def create_sequences(data, target, seq_length=60):
     return np.array(X), np.array(y)
 
 
-def load_data(symbol, timeframe, market='futures', data_dir='data/historical'):
+def load_data(symbol, timeframe, market='futures', data_dir='data/advanced'):
     """Load historical data from Parquet"""
 
-    # Try advanced collector format first (_multi.parquet)
-    filename = f"{symbol}_{timeframe}_{market}_multi.parquet"
-    filepath = Path(data_dir) / filename
+    # Try multiple file patterns in order
+    patterns = [
+        f"{symbol}_{timeframe}_{market}_binance.parquet",  # Advanced collector format
+        f"{symbol}_{timeframe}_{market}_multi.parquet",     # Multi-file format
+        f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
+    ]
 
-    # Fallback to old format if not found
-    if not filepath.exists():
-        filename = f"{symbol}_{timeframe}_{market}.parquet"
+    for filename in patterns:
         filepath = Path(data_dir) / filename
+        if filepath.exists():
+            print(f"📂 Loading data from {filepath}")
+            df = pd.read_parquet(filepath)
 
-    if not filepath.exists():
-        raise FileNotFoundError(f"Data file not found: {filepath}")
+            # Ensure required columns exist
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                raise ValueError(f"Data must have columns: {required_cols}")
 
-    print(f"📂 Loading data from {filepath}")
-    df = pd.read_parquet(filepath)
+            print(f"✅ Loaded {len(df)} candles")
+            return df
 
-    # Ensure required columns exist
-    required_cols = ['open', 'high', 'low', 'close', 'volume']
-    if not all(col in df.columns for col in required_cols):
-        raise ValueError(f"Data must have columns: {required_cols}")
-
-    print(f"✅ Loaded {len(df)} candles")
-    return df
+    # If none found, raise error
+    raise FileNotFoundError(
+        f"Data file not found for {symbol}_{timeframe}_{market} in {data_dir}. "
+        f"Tried patterns: {patterns}"
+    )
 
 
 def prepare_features(df, seq_length=60):
@@ -324,7 +328,7 @@ def main():
     parser.add_argument('--hidden-size', type=int, default=128, help='LSTM hidden size')
     parser.add_argument('--num-layers', type=int, default=2, help='Number of LSTM layers')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--data-dir', type=str, default='data/historical', help='Data directory')
+    parser.add_argument('--data-dir', type=str, default='data/advanced', help='Data directory')
     parser.add_argument('--output-dir', type=str, default='models/trained', help='Output directory')
 
     args = parser.parse_args()
