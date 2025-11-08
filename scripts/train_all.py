@@ -1,430 +1,313 @@
 #!/usr/bin/env python3
 """
-Train All Models Script
+Multi-Everything Model Trainer
+Trains models on all downloaded data (multi-coin, multi-timeframe, multi-market)
 
-Bu script tüm ML modellerini (XGBoost, LSTM, PPO) tek komutla eğitir.
-
-Kullanım:
-    # Tüm modelleri eğit
-    python scripts/train_all.py --symbol BTCUSDT --timeframe 1d
-
-    # Sadece belirli modelleri eğit
-    python scripts/train_all.py --symbol BTCUSDT --timeframe 1d --models xgboost,lstm
-
-    # Birden fazla sembol
-    python scripts/train_all.py --symbols BTCUSDT,ETHUSDT --timeframe 1d
-
-    # GPU kullan
-    python scripts/train_all.py --symbol BTCUSDT --timeframe 1d --use-gpu
-
-Özellikler:
-    ✅ Hata yönetimi - Her model için ayrı try-catch
-    ✅ Veri kontrolü - Dosya varlığı kontrol edilir
-    ✅ İlerleme takibi - Her adım raporlanır
-    ✅ Özet rapor - Başarılı/başarısız eğitimler
+Usage:
+    python scripts/train_all.py
 """
 
-import os
 import sys
-import argparse
-import subprocess
+import os
 from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import subprocess
+import time
 from datetime import datetime
+from typing import List, Dict
 import json
 
-# Renkli terminal çıktısı için
-class Colors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+# ============================================
+# CONFIGURATION
+# ============================================
+
+CONFIGS = {
+    # Data directory
+    "data_dir": "data/advanced",
+
+    # Models to train
+    "models": ["xgboost"],  # Start with just xgboost for testing
+
+    # Epochs
+    "epochs": {
+        "ppo": 5,
+        "ensemble": 1,
+        "lstm": 20,
+    },
+
+    # Device
+    "device": "cpu",  # Use CPU for compatibility
+
+    # Separate models
+    "separate_by_market": True,
+    "separate_by_timeframe": True,
+
+    # Filters
+    "timeframes": ["1d"],  # Only 1d for now
+    "markets": None,  # All markets
+
+    # Output
+    "output_dir": "data/models",
+
+    # Model-specific hyperparameters
+    "ppo": {
+        "total_timesteps": 50_000,
+        "batch_size": 64,
+        "learning_rate": 3e-4,
+        "days": 60,
+    },
+
+    "lstm": {
+        "seq_len": 30,
+        "hidden_size": 128,
+        "num_layers": 2,
+        "learning_rate": 1e-3,
+        "days": 60,
+    },
+
+    "ensemble": {
+        "models": ["xgboost"],
+        "days": 60,
+        "xgboost": {
+            "n_estimators": 200,
+            "learning_rate": 0.1,
+            "max_depth": 4,
+            "tree_method": "auto",
+        },
+    },
+
+    "seed": 42,
+}
 
 
-def print_header(text):
-    """Başlık yazdır"""
-    print(f"\n{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.ENDC}")
-    print(f"{Colors.HEADER}{Colors.BOLD}{text.center(70)}{Colors.ENDC}")
-    print(f"{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
-
-
-def print_success(text):
-    """Başarı mesajı"""
-    print(f"{Colors.OKGREEN}✅ {text}{Colors.ENDC}")
-
-
-def print_error(text):
-    """Hata mesajı"""
-    print(f"{Colors.FAIL}❌ {text}{Colors.ENDC}")
-
-
-def print_warning(text):
-    """Uyarı mesajı"""
-    print(f"{Colors.WARNING}⚠️  {text}{Colors.ENDC}")
-
-
-def print_info(text):
-    """Bilgi mesajı"""
-    print(f"{Colors.OKCYAN}ℹ️  {text}{Colors.ENDC}")
-
-
-def check_data_exists(symbol, timeframe, data_dirs=['data/historical', 'data/advanced']):
+def find_data_files(data_dir: str, timeframes: List[str] = None, markets: List[str] = None) -> Dict[str, List[str]]:
     """
-    Veri dosyasının varlığını kontrol et - birden fazla klasörde ara
+    Find all parquet files and group by market and timeframe
 
     Returns:
-        (exists: bool, filepath: Path, actual_data_dir: str)
+        dict: {'spot_1d': ['file1.parquet', ...], ...}
     """
-    # Olası dosya isimleri
-    possible_filenames = [
-        f"{symbol}_{timeframe}_futures.parquet",
-        f"{symbol}_{timeframe}_spot.parquet",
-        f"{symbol}_{timeframe}.parquet",
-        f"{symbol}_{timeframe}_futures.csv",
-        f"{symbol}_{timeframe}_spot.csv",
-        f"{symbol}_{timeframe}.csv",
-    ]
+    data_dir = Path(data_dir)
+    files = {}
 
-    # Her klasörü dene
-    for data_dir in data_dirs:
-        data_path = Path(data_dir)
-        if not data_path.exists():
-            continue
+    for parquet_file in data_dir.glob("*_multi.parquet"):
+        # Parse: SYMBOL_TF_MARKET_multi.parquet
+        parts = parquet_file.stem.split('_')
 
-        # Her dosya ismini dene
-        for filename in possible_filenames:
-            filepath = data_path / filename
-            if filepath.exists():
-                return True, filepath, str(data_path)
+        if len(parts) >= 3:
+            symbol = parts[0]
+            timeframe = parts[1]
+            market = parts[2]
 
-    return False, None, None
+            # Apply filters
+            if timeframes and timeframe not in timeframes:
+                continue
+            if markets and market not in markets:
+                continue
+
+            key = f"{market}_{timeframe}"
+            if key not in files:
+                files[key] = []
+            files[key].append(str(parquet_file))
+
+    return files
 
 
-def train_xgboost(symbol, timeframe, data_dir, output_dir, task='trend_classification'):
-    """XGBoost modelini eğit"""
-    print_info(f"XGBoost eğitimi başlatılıyor... (Task: {task})")
+def train_model(model_type: str, data_files: List[str], output_name: str,
+                epochs: int, device: str, hyperparams: Dict) -> Dict:
+    """Train a single model"""
+    start_time = time.time()
 
+    print(f"\n{'='*80}")
+    print(f"🎓 Training {model_type.upper()}: {output_name}")
+    print(f"{'='*80}")
+    print(f"📊 Data files: {len(data_files)}")
+    print(f"⚙️  Epochs/Steps: {epochs}")
+    print(f"🖥️  Device: {device}")
+
+    # Select wrapper script
+    if model_type == "ppo":
+        script = "backend/training/quick_train_ppo.py"
+    elif model_type == "ensemble" or model_type == "xgboost":
+        script = "backend/training/train_ensemble_quick.py"
+    elif model_type == "lstm":
+        script = "backend/training/train_lstm_quick.py"
+    else:
+        return {"status": "error", "error": f"Unknown model: {model_type}"}
+
+    # Save hyperparams
+    hyperparams_file = Path(CONFIGS['output_dir']) / f"{output_name}_hyperparams.json"
+    hyperparams_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(hyperparams_file, 'w') as f:
+        json.dump(hyperparams, f, indent=2)
+
+    # Build command
     cmd = [
-        sys.executable, '-m', 'backend.training.train_xgboost',
-        '--symbol', symbol,
-        '--timeframe', timeframe,
-        '--task', task,
-        '--n-estimators', '300',
-        '--max-depth', '6',
-        '--lr', '0.1',
-        '--data-dir', data_dir,
-        '--output-dir', output_dir
+        sys.executable, script,
+        "--data-files", ",".join(data_files),
+        "--epochs", str(epochs),
+        "--device", device,
+        "--output-name", output_name,
+        "--hyperparams", str(hyperparams_file),
+        "--seed", str(CONFIGS.get('seed', 42)),
     ]
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print_success(f"XGBoost ({task}) eğitimi tamamlandı!")
-        return True, None
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else str(e)
-        print_error(f"XGBoost ({task}) eğitimi başarısız!")
-        print(f"   Hata: {error_msg[:200]}...")
-        return False, error_msg
+        project_root = Path(__file__).parent.parent
+
+        print(f"\n🚀 Starting training...")
+
+        result = subprocess.run(
+            cmd,
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=7200
+        )
+
+        # Print output (last 50 lines)
+        if result.stdout:
+            lines = result.stdout.split('\n')
+            print('\n'.join(lines[-50:]))
+
+        if result.stderr and result.returncode != 0:
+            print("\nErrors:")
+            print(result.stderr[:1000])
+
+        elapsed = time.time() - start_time
+
+        if result.returncode == 0:
+            print(f"\n✅ Training complete in {elapsed/60:.1f} minutes")
+            return {
+                "status": "success",
+                "elapsed": elapsed,
+                "model_type": model_type,
+                "output_name": output_name,
+            }
+        else:
+            error_msg = result.stderr[:1000] if result.stderr else "Unknown error"
+            print(f"\n❌ Training failed")
+            return {
+                "status": "failed",
+                "elapsed": elapsed,
+                "error": error_msg,
+            }
+
     except Exception as e:
-        print_error(f"XGBoost ({task}) eğitimi başarısız!")
-        print(f"   Beklenmeyen hata: {str(e)}")
-        return False, str(e)
-
-
-def train_lstm(symbol, timeframe, data_dir, output_dir, epochs=100, use_gpu=False):
-    """LSTM modelini eğit"""
-    print_info(f"LSTM eğitimi başlatılıyor... (Epochs: {epochs})")
-
-    cmd = [
-        sys.executable, '-m', 'backend.training.train_lstm',
-        '--symbol', symbol,
-        '--timeframe', timeframe,
-        '--epochs', str(epochs),
-        '--batch-size', '32',
-        '--seq-length', '60',
-        '--hidden-size', '128',
-        '--num-layers', '2',
-        '--lr', '0.001',
-        '--data-dir', data_dir,
-        '--output-dir', output_dir
-    ]
-
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print_success(f"LSTM eğitimi tamamlandı!")
-        return True, None
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else str(e)
-        print_error(f"LSTM eğitimi başarısız!")
-        print(f"   Hata: {error_msg[:200]}...")
-        return False, error_msg
-    except Exception as e:
-        print_error(f"LSTM eğitimi başarısız!")
-        print(f"   Beklenmeyen hata: {str(e)}")
-        return False, str(e)
-
-
-def train_ppo(symbol, timeframe, data_dir, output_dir, episodes=1000, use_gpu=False):
-    """PPO modelini eğit"""
-    print_info(f"PPO eğitimi başlatılıyor... (Episodes: {episodes})")
-
-    cmd = [
-        sys.executable, '-m', 'backend.training.train_ppo',
-        '--symbol', symbol,
-        '--timeframe', timeframe,
-        '--episodes', str(episodes),
-        '--data-dir', data_dir,
-        '--output-dir', output_dir
-    ]
-
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print_success(f"PPO eğitimi tamamlandı!")
-        return True, None
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else str(e)
-        print_error(f"PPO eğitimi başarısız!")
-        print(f"   Hata: {error_msg[:200]}...")
-        return False, error_msg
-    except FileNotFoundError:
-        print_warning("PPO eğitim scripti bulunamadı, atlanıyor...")
-        return False, "Script not found"
-    except Exception as e:
-        print_error(f"PPO eğitimi başarısız!")
-        print(f"   Beklenmeyen hata: {str(e)}")
-        return False, str(e)
-
-
-def generate_report(results, output_dir):
-    """Eğitim sonuçlarını özetle"""
-    print_header("EĞİTİM RAPORU")
-
-    total_models = len(results)
-    successful = sum(1 for r in results if r['success'])
-    failed = total_models - successful
-
-    print(f"📊 Toplam Model: {total_models}")
-    print(f"{Colors.OKGREEN}✅ Başarılı: {successful}{Colors.ENDC}")
-    print(f"{Colors.FAIL}❌ Başarısız: {failed}{Colors.ENDC}")
-    print()
-
-    # Detaylar
-    print("Detaylar:")
-    print("-" * 70)
-    for r in results:
-        status = f"{Colors.OKGREEN}✅{Colors.ENDC}" if r['success'] else f"{Colors.FAIL}❌{Colors.ENDC}"
-        print(f"  {status} {r['model']:15s} | {r['symbol']:10s} | {r['timeframe']:5s}")
-        if not r['success'] and r.get('error'):
-            print(f"      {Colors.FAIL}└─ Hata: {r['error'][:60]}...{Colors.ENDC}")
-
-    # JSON raporu kaydet
-    report_file = Path(output_dir) / f"training_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(report_file, 'w') as f:
-        json.dump(results, f, indent=2)
-
-    print()
-    print(f"📄 Detaylı rapor: {report_file}")
-    print()
+        print(f"\n❌ Error: {str(e)}")
+        return {
+            "status": "error",
+            "elapsed": time.time() - start_time,
+            "error": str(e),
+        }
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Tüm ML modellerini eğit',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Örnekler:
-  # Tek sembol, tüm modeller
-  python scripts/train_all.py --symbol BTCUSDT --timeframe 1d
+    """Main training orchestrator"""
 
-  # Birden fazla sembol
-  python scripts/train_all.py --symbols BTCUSDT,ETHUSDT --timeframe 1d
+    print("\n" + "="*80)
+    print("🎓 MULTI-EVERYTHING MODEL TRAINER")
+    print("="*80)
 
-  # Sadece XGBoost ve LSTM
-  python scripts/train_all.py --symbol BTCUSDT --timeframe 1d --models xgboost,lstm
+    # Find data files
+    print(f"\n📁 Scanning {CONFIGS['data_dir']} for parquet files...")
 
-  # GPU kullan
-  python scripts/train_all.py --symbol BTCUSDT --timeframe 1d --use-gpu
-        """
-    )
+    timeframes = CONFIGS.get('timeframes')
+    markets = CONFIGS.get('markets')
 
-    # Ana parametreler
-    parser.add_argument('--symbol', type=str, help='Tek sembol (örn: BTCUSDT)')
-    parser.add_argument('--symbols', type=str, help='Birden fazla sembol, virgülle ayrılmış (örn: BTCUSDT,ETHUSDT)')
-    parser.add_argument('--timeframe', type=str, default='1d', help='Timeframe (örn: 1h, 4h, 1d)')
+    if timeframes:
+        print(f"   ⏱️  Filtering timeframes: {timeframes}")
 
-    # Model seçimi
-    parser.add_argument('--models', type=str, default='xgboost,lstm',
-                       help='Eğitilecek modeller, virgülle ayrılmış (xgboost,lstm,ppo)')
+    data_groups = find_data_files(CONFIGS['data_dir'], timeframes, markets)
 
-    # Model parametreleri
-    parser.add_argument('--epochs', type=int, default=50, help='LSTM epoch sayısı')
-    parser.add_argument('--episodes', type=int, default=1000, help='PPO episode sayısı')
-    parser.add_argument('--use-gpu', action='store_true', help='GPU kullan')
+    if not data_groups:
+        print(f"\n❌ No parquet files found in {CONFIGS['data_dir']}")
+        print(f"   Make sure you have files like: BTCUSDT_1d_futures_multi.parquet")
+        return False
 
-    # Dizinler
-    parser.add_argument('--data-dir', type=str, default='data/historical', help='Veri dizini')
-    parser.add_argument('--output-dir', type=str, default='models/trained', help='Model çıktı dizini')
+    print(f"\n✅ Found {len(data_groups)} data groups:")
+    for group_name, files in data_groups.items():
+        print(f"   - {group_name}: {len(files)} files")
 
-    args = parser.parse_args()
+    # Create training tasks
+    training_tasks = []
+    for group_name, files in data_groups.items():
+        for model_type in CONFIGS['models']:
+            training_tasks.append({
+                'group_name': group_name,
+                'model_type': model_type,
+                'files': files,
+            })
 
-    # Sembolleri belirle
-    if args.symbols:
-        symbols = [s.strip() for s in args.symbols.split(',')]
-    elif args.symbol:
-        symbols = [args.symbol]
-    else:
-        print_error("En az bir sembol belirtmelisiniz! (--symbol veya --symbols)")
-        parser.print_help()
-        sys.exit(1)
+    print(f"\n📋 Total training tasks: {len(training_tasks)}")
+    print(f"🖥️  Device: {CONFIGS['device']}")
 
-    # Modelleri belirle
-    available_models = ['xgboost', 'lstm', 'ppo']
-    selected_models = [m.strip().lower() for m in args.models.split(',')]
+    for i, task in enumerate(training_tasks, 1):
+        print(f"\n   Task {i}: {task['model_type'].upper()} on {task['group_name']} ({len(task['files'])} files)")
 
-    # Geçersiz modelleri kontrol et
-    invalid_models = [m for m in selected_models if m not in available_models]
-    if invalid_models:
-        print_error(f"Geçersiz model(ler): {invalid_models}")
-        print_info(f"Geçerli modeller: {available_models}")
-        sys.exit(1)
+    input("\nPress ENTER to start training...")
 
-    # Başlık
-    print_header("🤖 TÜM MODELLER İÇİN EĞİTİM BAŞLATILIYOR")
-
-    print(f"📋 Ayarlar:")
-    print(f"   Semboller: {', '.join(symbols)}")
-    print(f"   Timeframe: {args.timeframe}")
-    print(f"   Modeller: {', '.join(selected_models)}")
-    print(f"   LSTM Epochs: {args.epochs}")
-    print(f"   PPO Episodes: {args.episodes}")
-    print(f"   GPU: {'Evet' if args.use_gpu else 'Hayır'}")
-    print(f"   Veri Dizini: {args.data_dir}")
-    print(f"   Çıktı Dizini: {args.output_dir}")
-    print()
-
-    # Çıktı dizinini oluştur
-    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Eğitim sonuçları
+    # Train models
     results = []
+    start_time = time.time()
 
-    # Her sembol için
-    for symbol in symbols:
-        print_header(f"📊 {symbol} - {args.timeframe}")
+    for i, task in enumerate(training_tasks, 1):
+        print(f"\n{'='*80}")
+        print(f"📊 TASK {i}/{len(training_tasks)}")
+        print(f"{'='*80}")
 
-        # Veri dosyasını kontrol et - birden fazla klasörde ara
-        data_dirs = [args.data_dir, 'data/historical', 'data/advanced']
-        data_exists, data_file, actual_data_dir = check_data_exists(
-            symbol, args.timeframe, data_dirs
+        output_name = f"{task['group_name']}_{task['model_type']}"
+        epochs = CONFIGS['epochs'].get(task['model_type'], 100)
+
+        result = train_model(
+            model_type=task['model_type'],
+            data_files=task['files'],
+            output_name=output_name,
+            epochs=epochs,
+            device=CONFIGS['device'],
+            hyperparams=CONFIGS[task['model_type']],
         )
 
-        if not data_exists:
-            print_error(f"Veri dosyası bulunamadı: {symbol}_{args.timeframe}")
-            print_info(f"Aranan klasörler: {', '.join(data_dirs)}")
-            print_warning("Bu sembolu atlıyorum...")
+        results.append(result)
 
-            # Tüm modeller için başarısız kaydet
-            for model in selected_models:
-                results.append({
-                    'symbol': symbol,
-                    'timeframe': args.timeframe,
-                    'model': model,
-                    'success': False,
-                    'error': 'Data file not found'
-                })
-            continue
+    # Summary
+    total_elapsed = time.time() - start_time
 
-        print_success(f"Veri dosyası bulundu: {data_file}")
-        print_info(f"Veri klasörü: {actual_data_dir}")
-        print()
+    print("\n" + "="*80)
+    print("📊 TRAINING SUMMARY")
+    print("="*80)
 
-        # XGBoost
-        if 'xgboost' in selected_models:
-            print(f"\n{Colors.BOLD}[1/X] XGBoost Eğitimi{Colors.ENDC}")
-            print("-" * 70)
+    success_count = sum(1 for r in results if r['status'] == 'success')
+    failed_count = len(results) - success_count
 
-            # Trend classification
-            success, error = train_xgboost(
-                symbol, args.timeframe,
-                actual_data_dir, args.output_dir,  # Gerçek veri klasörünü kullan
-                task='trend_classification'
-            )
-            results.append({
-                'symbol': symbol,
-                'timeframe': args.timeframe,
-                'model': 'xgboost_trend',
-                'success': success,
-                'error': error
-            })
+    print(f"✅ Success: {success_count}/{len(training_tasks)}")
+    print(f"❌ Failed: {failed_count}/{len(training_tasks)}")
+    print(f"⏱️  Total time: {total_elapsed/60:.1f} minutes")
 
-            # Pattern classification (opsiyonel)
-            # Uncomment if you want pattern classification too
-            # success, error = train_xgboost(
-            #     symbol, args.timeframe,
-            #     args.data_dir, args.output_dir,
-            #     task='pattern_classification'
-            # )
-            # results.append({
-            #     'symbol': symbol,
-            #     'timeframe': args.timeframe,
-            #     'model': 'xgboost_pattern',
-            #     'success': success,
-            #     'error': error
-            # })
+    # Save results
+    results_file = Path(CONFIGS['output_dir']) / f"training_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
-        # LSTM
-        if 'lstm' in selected_models:
-            print(f"\n{Colors.BOLD}[2/X] LSTM Eğitimi{Colors.ENDC}")
-            print("-" * 70)
+    with open(results_file, 'w') as f:
+        json.dump({
+            'config': CONFIGS,
+            'total_elapsed': total_elapsed,
+            'results': results,
+        }, f, indent=2)
 
-            success, error = train_lstm(
-                symbol, args.timeframe,
-                actual_data_dir, args.output_dir,  # Gerçek veri klasörünü kullan
-                epochs=args.epochs,
-                use_gpu=args.use_gpu
-            )
-            results.append({
-                'symbol': symbol,
-                'timeframe': args.timeframe,
-                'model': 'lstm',
-                'success': success,
-                'error': error
-            })
+    print(f"\n💾 Results saved to: {results_file}")
+    print(f"\n{'='*80}")
+    print("🎉 TRAINING COMPLETE!")
+    print(f"{'='*80}\n")
 
-        # PPO
-        if 'ppo' in selected_models:
-            print(f"\n{Colors.BOLD}[3/X] PPO Eğitimi{Colors.ENDC}")
-            print("-" * 70)
-
-            success, error = train_ppo(
-                symbol, args.timeframe,
-                actual_data_dir, args.output_dir,  # Gerçek veri klasörünü kullan
-                episodes=args.episodes,
-                use_gpu=args.use_gpu
-            )
-            results.append({
-                'symbol': symbol,
-                'timeframe': args.timeframe,
-                'model': 'ppo',
-                'success': success,
-                'error': error
-            })
-
-    # Raporu göster
-    generate_report(results, args.output_dir)
-
-    # Başarı durumuna göre exit code
-    if any(r['success'] for r in results):
-        print_success("Eğitim süreci tamamlandı!")
-        sys.exit(0)
-    else:
-        print_error("Tüm eğitimler başarısız oldu!")
-        sys.exit(1)
+    return success_count == len(training_tasks)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)

@@ -132,10 +132,12 @@ def create_sequences(data, target, seq_length=60):
 def load_data(symbol, timeframe, data_dir='data/historical'):
     """Load historical data from Parquet - supports multiple file formats"""
 
-    # Olası dosya isimleri
+    # Olası dosya isimleri (support both naming conventions)
     possible_filenames = [
-        f"{symbol}_{timeframe}_futures.parquet",
-        f"{symbol}_{timeframe}_spot.parquet",
+        f"{symbol}_{timeframe}_futures_multi.parquet",  # Cursor format
+        f"{symbol}_{timeframe}_spot_multi.parquet",     # Cursor format
+        f"{symbol}_{timeframe}_futures.parquet",        # Old format
+        f"{symbol}_{timeframe}_spot.parquet",           # Old format
         f"{symbol}_{timeframe}.parquet",
         f"{symbol}_{timeframe}_futures.csv",
         f"{symbol}_{timeframe}_spot.csv",
@@ -335,6 +337,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train LSTM model')
     parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
     parser.add_argument('--timeframe', type=str, default='1h', help='Timeframe (e.g., 1h, 4h)')
+    parser.add_argument('--market', type=str, default='futures', choices=['spot', 'futures'], help='Market type')
     parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
     parser.add_argument('--seq-length', type=int, default=60, help='Sequence length (lookback)')
