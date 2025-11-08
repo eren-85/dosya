@@ -18,7 +18,7 @@ Training:
 """
 
 import torch
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 from pathlib import Path
 import numpy as np
 from PIL import Image
