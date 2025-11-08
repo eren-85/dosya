@@ -146,6 +146,14 @@ def load_data(symbol, timeframe, data_dir='data/historical'):
     if not all(col in df.columns for col in required_cols):
         raise ValueError(f"Data must have columns: {required_cols}")
 
+    # Convert price columns to numeric (fix string data types)
+    print("🔧 Converting data types...")
+    for col in required_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Drop any rows with NaN values after conversion
+    df.dropna(subset=required_cols, inplace=True)
+
     print(f"✅ Loaded {len(df)} candles")
     return df
 

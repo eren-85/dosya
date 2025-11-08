@@ -101,6 +101,7 @@ temp/
 *.hdf5
 *.joblib
 *.pickle
+models/trained/
 
 # Secrets
 *.pem
