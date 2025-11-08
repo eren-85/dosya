@@ -208,9 +208,16 @@ class LiveMarketCashFlowAnalyzer:
             df['timestamp'] = pd.to_datetime(df['open_time'], unit='ms')
 
             # Convert to numeric
-            numeric_cols = ['open', 'high', 'low', 'close', 'volume', 'taker_buy_base']
+            numeric_cols = ['open', 'high', 'low', 'close', 'volume', 'quote_asset_volume',
+                          'taker_buy_base', 'taker_buy_quote']
             for col in numeric_cols:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Use USD-based volumes for accurate comparison
+            # volume_usd = quote_asset_volume (total USDT volume)
+            # taker_buy_volume_usd = taker_buy_quote (buyer USDT volume)
+            df['volume'] = df['quote_asset_volume']  # Use USD volume instead of coin volume
+            df['taker_buy_base'] = df['taker_buy_quote']  # Use USD buy volume
 
             # Select required columns
             df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume', 'taker_buy_base']]

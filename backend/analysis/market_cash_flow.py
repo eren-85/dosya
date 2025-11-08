@@ -131,11 +131,24 @@ class MarketCashFlowAnalyzer:
                 df = pd.read_parquet(file_path)
 
                 # Normalize column names (handle different naming conventions)
-                # Binance uses: open_time, taker_base
-                # We expect: timestamp, taker_buy_base
+                # Binance uses: open_time, taker_base, quote_asset_volume
+                # We expect: timestamp, taker_buy_base (USD-based!)
                 if 'open_time' in df.columns and 'timestamp' not in df.columns:
                     df['timestamp'] = df['open_time']
-                if 'taker_base' in df.columns and 'taker_buy_base' not in df.columns:
+
+                # Use USD-based volumes for accurate comparison
+                # If quote_asset_volume exists, use it instead of base volume
+                if 'quote_asset_volume' in df.columns:
+                    df['volume'] = df['quote_asset_volume']  # USD volume
+                    if 'taker_quote' in df.columns:
+                        df['taker_buy_base'] = df['taker_quote']  # USD buy volume
+                    elif 'taker_base' in df.columns:
+                        # Fallback: convert coin volume to USD
+                        logger.warning(f"⚠️ {symbol}: Using coin volume (less accurate)")
+                        df['taker_buy_base'] = df['taker_base']
+                elif 'taker_base' in df.columns and 'taker_buy_base' not in df.columns:
+                    # Old format: only coin volume available
+                    logger.warning(f"⚠️ {symbol}: Using coin volume (less accurate)")
                     df['taker_buy_base'] = df['taker_base']
 
                 # Filter recent data
@@ -154,7 +167,8 @@ class MarketCashFlowAnalyzer:
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
 
                 # Ensure numeric columns are numeric
-                numeric_cols = ['volume', 'close', 'taker_buy_base', 'open', 'high', 'low']
+                numeric_cols = ['volume', 'close', 'taker_buy_base', 'open', 'high', 'low',
+                              'quote_asset_volume', 'taker_quote']
                 for col in numeric_cols:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors='coerce')
