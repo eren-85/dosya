@@ -90,10 +90,7 @@ class MultiModalTradingEnvironment(gym.Env):
         # Chart image generator
         self.chart_generator = ChartImageGenerator()
 
-        # Add Ensemble predictions
-        self._add_ensemble_predictions()
-
-        # Clean data BEFORE feature selection
+        # Clean data FIRST (before adding Ensemble predictions)
         # 1. Drop object columns explicitly
         object_cols = self.df.select_dtypes(include=['object']).columns.tolist()
         if object_cols:
@@ -104,6 +101,9 @@ class MultiModalTradingEnvironment(gym.Env):
 
         # 3. Fill remaining NaN with forward/backward fill
         self.df = self.df.ffill().bfill().fillna(0)
+
+        # Add Ensemble predictions AFTER data cleaning (CRITICAL FIX)
+        self._add_ensemble_predictions()
 
         # Feature columns - only numeric columns
         excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']

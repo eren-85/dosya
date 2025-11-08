@@ -72,10 +72,7 @@ class TradingEnvironment(gym.Env):
         self.initial_capital = initial_capital
         self.commission = commission
 
-        # Calculate indicators
-        self._calculate_indicators()
-
-        # Clean data BEFORE feature selection
+        # Clean data FIRST (before calculating indicators)
         # 1. Drop object columns explicitly
         object_cols = self.df.select_dtypes(include=['object']).columns.tolist()
         if object_cols:
@@ -86,6 +83,9 @@ class TradingEnvironment(gym.Env):
 
         # 3. Fill remaining NaN with forward/backward fill
         self.df = self.df.ffill().bfill().fillna(0)
+
+        # Calculate indicators AFTER cleaning
+        self._calculate_indicators()
 
         # Feature columns - only numeric columns
         excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']

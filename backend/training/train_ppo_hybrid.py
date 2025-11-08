@@ -83,10 +83,7 @@ class HybridTradingEnvironment(gym.Env):
         self.initial_capital = initial_capital
         self.commission = commission
 
-        # Add Ensemble predictions to dataframe
-        self._add_ensemble_predictions()
-
-        # Clean data BEFORE feature selection
+        # Clean data FIRST (before adding Ensemble predictions)
         # 1. Drop object columns explicitly
         object_cols = self.df.select_dtypes(include=['object']).columns.tolist()
         if object_cols:
@@ -97,6 +94,9 @@ class HybridTradingEnvironment(gym.Env):
 
         # 3. Fill remaining NaN with forward/backward fill
         self.df = self.df.ffill().bfill().fillna(0)
+
+        # Add Ensemble predictions AFTER data cleaning (CRITICAL FIX)
+        self._add_ensemble_predictions()
 
         # Feature columns (including Ensemble predictions) - only numeric columns
         excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
