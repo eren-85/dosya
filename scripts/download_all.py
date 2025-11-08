@@ -143,25 +143,43 @@ def run_download(symbols: List[str], timeframe: str, market: str,
 
         if return_code == 0:
             # Parse output for success count
-            success_count = 0
+            success_count = None
+            total_count = None
             for line in output_lines:
                 if 'Success:' in line:
                     # Extract "Success: X/Y"
                     parts = line.split('Success:')
                     if len(parts) > 1:
-                        success_str = parts[1].strip().split('/')[0].strip()
                         try:
-                            success_count = int(success_str)
+                            # Parse "X/Y" format
+                            counts = parts[1].strip().split()[0]  # Get first word after "Success:"
+                            if '/' in counts:
+                                success_str, total_str = counts.split('/')
+                                success_count = int(success_str)
+                                total_count = int(total_str)
                         except:
                             pass
 
+            # If success_count not found, check for errors in output
+            if success_count is None:
+                # Check if there were errors that prevented downloads
+                if 'KeyError' in output or 'Error' in output or 'FAILED' in output:
+                    success_count = 0
+                else:
+                    # Assume success if no errors detected
+                    success_count = len(symbols)
+
+            # Mark as failed if no symbols succeeded
+            actual_status = "success" if success_count > 0 else "failed"
+
             return {
-                "status": "success",
+                "status": actual_status,
                 "elapsed": elapsed,
                 "symbols": symbols,
                 "timeframe": timeframe,
                 "market": market,
-                "success_count": success_count or len(symbols),
+                "success_count": success_count,
+                "total_count": total_count or len(symbols),
             }
         else:
             return {
@@ -238,9 +256,13 @@ def main():
 
             # Print result
             if result['status'] == 'success':
-                print(f"✅ SUCCESS in {result['elapsed']:.1f}s - {result.get('success_count', 0)}/{len(CONFIGS['symbols'])} symbols")
+                total = result.get('total_count', len(CONFIGS['symbols']))
+                success = result.get('success_count', 0)
+                print(f"✅ SUCCESS in {result['elapsed']:.1f}s - {success}/{total} symbols")
             else:
-                print(f"❌ FAILED: {result['status']} - {result.get('error', 'Unknown error')}")
+                total = result.get('total_count', len(CONFIGS['symbols']))
+                success = result.get('success_count', 0)
+                print(f"❌ FAILED: {result['status']} - {success}/{total} symbols - {result.get('error', 'Unknown error')}")
 
     # Final summary
     total_elapsed = time.time() - start_time

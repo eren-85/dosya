@@ -97,7 +97,7 @@ class AdvancedDataCollector:
         # Timeframe mapping
         self.tf_map = {
             '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
-            '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
+            '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w', '1M': '1M'
         }
 
         # Bybit timeframe mapping
@@ -157,9 +157,14 @@ class AdvancedDataCollector:
         probe_start = current_start
 
         while probe_start < end_time and not found_first_data:
+            # Safe timeframe validation
+            interval = self.tf_map.get(self.timeframe)
+            if interval is None:
+                raise ValueError(f"Unsupported timeframe: {self.timeframe}. Supported: {list(self.tf_map.keys())}")
+
             params = {
                 'symbol': self.symbol,
-                'interval': self.tf_map[self.timeframe],
+                'interval': interval,
                 'startTime': probe_start,
                 'endTime': end_time,
                 'limit': 10  # Small limit for probe
@@ -192,9 +197,14 @@ class AdvancedDataCollector:
 
         # Now fetch all data from actual start
         while current_start < end_time:
+            # Safe timeframe validation
+            interval = self.tf_map.get(self.timeframe)
+            if interval is None:
+                raise ValueError(f"Unsupported timeframe: {self.timeframe}. Supported: {list(self.tf_map.keys())}")
+
             params = {
                 'symbol': self.symbol,
-                'interval': self.tf_map[self.timeframe],
+                'interval': interval,
                 'startTime': current_start,
                 'endTime': end_time,
                 'limit': limit
@@ -433,9 +443,14 @@ class AdvancedDataCollector:
         found_start = False
 
         while probe_start < end_time and not found_start:
+            # Safe timeframe validation
+            interval = self.tf_map.get(self.timeframe)
+            if interval is None:
+                raise ValueError(f"Unsupported timeframe: {self.timeframe}. Supported: {list(self.tf_map.keys())}")
+
             params = {
                 'symbol': self.symbol,
-                'period': self.tf_map[self.timeframe],
+                'period': interval,
                 'startTime': probe_start,
                 'endTime': end_time,
                 'limit': 500
@@ -477,9 +492,14 @@ class AdvancedDataCollector:
 
         # STEP 2: Normal pagination from first valid timestamp
         while current_start < end_time:
+            # Safe timeframe validation
+            interval = self.tf_map.get(self.timeframe)
+            if interval is None:
+                raise ValueError(f"Unsupported timeframe: {self.timeframe}. Supported: {list(self.tf_map.keys())}")
+
             params = {
                 'symbol': self.symbol,
-                'period': self.tf_map[self.timeframe],
+                'period': interval,
                 'startTime': current_start,
                 'endTime': end_time,
                 'limit': 500
