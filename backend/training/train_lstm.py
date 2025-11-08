@@ -130,16 +130,41 @@ def create_sequences(data, target, seq_length=60):
 
 
 def load_data(symbol, timeframe, data_dir='data/historical'):
-    """Load historical data from Parquet"""
+    """Load historical data from Parquet - supports multiple file formats"""
 
-    filename = f"{symbol}_{timeframe}_futures.parquet"
-    filepath = Path(data_dir) / filename
+    # Olası dosya isimleri
+    possible_filenames = [
+        f"{symbol}_{timeframe}_futures.parquet",
+        f"{symbol}_{timeframe}_spot.parquet",
+        f"{symbol}_{timeframe}.parquet",
+        f"{symbol}_{timeframe}_futures.csv",
+        f"{symbol}_{timeframe}_spot.csv",
+        f"{symbol}_{timeframe}.csv",
+    ]
 
-    if not filepath.exists():
-        raise FileNotFoundError(f"Data file not found: {filepath}")
+    # Önce belirtilen klasörde ara
+    filepath = None
+    for filename in possible_filenames:
+        test_path = Path(data_dir) / filename
+        if test_path.exists():
+            filepath = test_path
+            break
+
+    if filepath is None:
+        raise FileNotFoundError(
+            f"Data file not found for {symbol}_{timeframe} in {data_dir}\n"
+            f"Tried: {', '.join(possible_filenames)}"
+        )
 
     print(f"📂 Loading data from {filepath}")
-    df = pd.read_parquet(filepath)
+
+    # Dosya uzantısına göre yükle
+    if filepath.suffix == '.parquet':
+        df = pd.read_parquet(filepath)
+    elif filepath.suffix == '.csv':
+        df = pd.read_csv(filepath)
+    else:
+        raise ValueError(f"Unsupported file format: {filepath.suffix}")
 
     # Ensure required columns exist
     required_cols = ['open', 'high', 'low', 'close', 'volume']

@@ -72,26 +72,36 @@ def print_info(text):
     print(f"{Colors.OKCYAN}ℹ️  {text}{Colors.ENDC}")
 
 
-def check_data_exists(symbol, timeframe, data_dir='data/historical'):
+def check_data_exists(symbol, timeframe, data_dirs=['data/historical', 'data/advanced']):
     """
-    Veri dosyasının varlığını kontrol et
+    Veri dosyasının varlığını kontrol et - birden fazla klasörde ara
 
     Returns:
-        (exists: bool, filepath: Path)
+        (exists: bool, filepath: Path, actual_data_dir: str)
     """
-    data_dir = Path(data_dir)
+    # Olası dosya isimleri
+    possible_filenames = [
+        f"{symbol}_{timeframe}_futures.parquet",
+        f"{symbol}_{timeframe}_spot.parquet",
+        f"{symbol}_{timeframe}.parquet",
+        f"{symbol}_{timeframe}_futures.csv",
+        f"{symbol}_{timeframe}_spot.csv",
+        f"{symbol}_{timeframe}.csv",
+    ]
 
-    # Önce parquet'i dene
-    parquet_file = data_dir / f"{symbol}_{timeframe}_futures.parquet"
-    if parquet_file.exists():
-        return True, parquet_file
+    # Her klasörü dene
+    for data_dir in data_dirs:
+        data_path = Path(data_dir)
+        if not data_path.exists():
+            continue
 
-    # Sonra CSV'yi dene
-    csv_file = data_dir / f"{symbol}_{timeframe}_futures.csv"
-    if csv_file.exists():
-        return True, csv_file
+        # Her dosya ismini dene
+        for filename in possible_filenames:
+            filepath = data_path / filename
+            if filepath.exists():
+                return True, filepath, str(data_path)
 
-    return False, None
+    return False, None, None
 
 
 def train_xgboost(symbol, timeframe, data_dir, output_dir, task='trend_classification'):
@@ -306,11 +316,15 @@ def main():
     for symbol in symbols:
         print_header(f"📊 {symbol} - {args.timeframe}")
 
-        # Veri dosyasını kontrol et
-        data_exists, data_file = check_data_exists(symbol, args.timeframe, args.data_dir)
+        # Veri dosyasını kontrol et - birden fazla klasörde ara
+        data_dirs = [args.data_dir, 'data/historical', 'data/advanced']
+        data_exists, data_file, actual_data_dir = check_data_exists(
+            symbol, args.timeframe, data_dirs
+        )
 
         if not data_exists:
-            print_error(f"Veri dosyası bulunamadı: {symbol}_{args.timeframe}_futures.parquet/csv")
+            print_error(f"Veri dosyası bulunamadı: {symbol}_{args.timeframe}")
+            print_info(f"Aranan klasörler: {', '.join(data_dirs)}")
             print_warning("Bu sembolu atlıyorum...")
 
             # Tüm modeller için başarısız kaydet
@@ -325,6 +339,7 @@ def main():
             continue
 
         print_success(f"Veri dosyası bulundu: {data_file}")
+        print_info(f"Veri klasörü: {actual_data_dir}")
         print()
 
         # XGBoost
@@ -335,7 +350,7 @@ def main():
             # Trend classification
             success, error = train_xgboost(
                 symbol, args.timeframe,
-                args.data_dir, args.output_dir,
+                actual_data_dir, args.output_dir,  # Gerçek veri klasörünü kullan
                 task='trend_classification'
             )
             results.append({
@@ -368,7 +383,7 @@ def main():
 
             success, error = train_lstm(
                 symbol, args.timeframe,
-                args.data_dir, args.output_dir,
+                actual_data_dir, args.output_dir,  # Gerçek veri klasörünü kullan
                 epochs=args.epochs,
                 use_gpu=args.use_gpu
             )
@@ -387,7 +402,7 @@ def main():
 
             success, error = train_ppo(
                 symbol, args.timeframe,
-                args.data_dir, args.output_dir,
+                actual_data_dir, args.output_dir,  # Gerçek veri klasörünü kullan
                 episodes=args.episodes,
                 use_gpu=args.use_gpu
             )
