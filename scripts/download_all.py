@@ -24,6 +24,7 @@ import time
 from datetime import datetime
 from typing import List, Dict
 import json
+import argparse
 
 # ============================================
 # CONFIGURATION
@@ -213,18 +214,52 @@ def run_download(symbols: List[str], timeframe: str, market: str,
 def main():
     """Main download orchestrator"""
 
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Multi-Everything Data Downloader")
+    parser.add_argument(
+        '--only-timeframes',
+        type=str,
+        help='Download only specific timeframes (comma-separated, e.g., "1M" or "1M,1w")'
+    )
+    parser.add_argument(
+        '--only-markets',
+        type=str,
+        help='Download only specific markets (comma-separated, e.g., "spot" or "spot,futures")'
+    )
+    args = parser.parse_args()
+
+    # Filter timeframes if specified
+    timeframes = CONFIGS['timeframes']
+    if args.only_timeframes:
+        requested_tfs = [tf.strip() for tf in args.only_timeframes.split(',')]
+        timeframes = [tf for tf in requested_tfs if tf in CONFIGS['timeframes']]
+        if not timeframes:
+            print(f"❌ Error: No valid timeframes found in '{args.only_timeframes}'")
+            print(f"   Available: {', '.join(CONFIGS['timeframes'])}")
+            return False
+
+    # Filter markets if specified
+    markets = CONFIGS['markets']
+    if args.only_markets:
+        requested_markets = [m.strip() for m in args.only_markets.split(',')]
+        markets = [m for m in requested_markets if m in CONFIGS['markets']]
+        if not markets:
+            print(f"❌ Error: No valid markets found in '{args.only_markets}'")
+            print(f"   Available: {', '.join(CONFIGS['markets'])}")
+            return False
+
     print("\n" + "="*80)
     print("🚀 MULTI-EVERYTHING DATA DOWNLOADER")
     print("="*80)
     print(f"📊 Symbols: {', '.join(CONFIGS['symbols'])}")
-    print(f"⏰ Timeframes: {', '.join(CONFIGS['timeframes'])}")
-    print(f"🏪 Markets: {', '.join(CONFIGS['markets'])}")
+    print(f"⏰ Timeframes: {', '.join(timeframes)}")
+    print(f"🏪 Markets: {', '.join(markets)}")
     print(f"🌐 Exchanges: {', '.join(CONFIGS['exchanges'])}")
     print(f"📅 Start date: {CONFIGS['start_date']}")
     print("="*80 + "\n")
 
     # Calculate total tasks
-    total_tasks = len(CONFIGS['timeframes']) * len(CONFIGS['markets'])
+    total_tasks = len(timeframes) * len(markets)
     print(f"📋 Total tasks: {total_tasks}")
     print(f"📦 Total symbols: {len(CONFIGS['symbols'])}")
     print(f"🔄 Parallel workers per task: {CONFIGS['max_workers']}\n")
@@ -235,8 +270,8 @@ def main():
     start_time = time.time()
 
     task_num = 0
-    for timeframe in CONFIGS['timeframes']:
-        for market in CONFIGS['markets']:
+    for timeframe in timeframes:
+        for market in markets:
             task_num += 1
 
             print(f"\n{'='*80}")
