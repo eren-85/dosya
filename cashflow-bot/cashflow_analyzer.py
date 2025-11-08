@@ -41,7 +41,8 @@ class CashFlowAnalyzer:
         top_n: int = 30,
         limit: int = 500,
         format: str = 'text',
-        analyze_pool: int = 100
+        analyze_pool: Optional[int] = None,
+        min_volume_usd: float = 100000
     ) -> Dict[str, Any]:
         """
         Ana analiz fonksiyonu
@@ -52,16 +53,18 @@ class CashFlowAnalyzer:
             top_n: Raporda gösterilecek top N coin (5-50)
             limit: Kaç candle analiz edilecek (100-1000)
             format: Çıktı formatı ('text', 'table', 'html')
-            analyze_pool: Kaç coin analiz edilecek (varsayılan 100)
+            analyze_pool: Kaç coin analiz edilecek (None = TÜM coinler)
+            min_volume_usd: Minimum 24h USD volume filtresi (varsayılan $100K)
 
         Returns:
             Analiz raporu (dict)
         """
-        logger.info(f"🔍 Analiz başlatılıyor (pool={analyze_pool}, show_top={top_n})")
+        pool_desc = "TÜM" if analyze_pool is None else str(analyze_pool)
+        logger.info(f"🔍 Analiz başlatılıyor (pool={pool_desc}, show_top={top_n}, min_vol=${min_volume_usd:,.0f})")
 
-        # Coin seçimi - GENİŞ POOL (tüm coin'leri yakala)
+        # Coin seçimi - GENİŞ POOL veya TÜM COINLER
         if symbols is None:
-            symbols = self._get_top_coins(analyze_pool)
+            symbols = self._get_top_coins(analyze_pool, min_volume_usd)
             logger.info(f"📊 {len(symbols)} coin analiz edilecek")
 
         # Veri çekme
@@ -82,20 +85,38 @@ class CashFlowAnalyzer:
         logger.info(f"✅ Analiz tamamlandı ({len(flows)} coin analiz edildi, top {top_n} gösteriliyor)")
         return report
 
-    def _get_top_coins(self, limit: int) -> List[str]:
-        """24h USD hacmine göre top coinleri getir"""
+    def _get_top_coins(self, limit: Optional[int], min_volume_usd: float = 100000) -> List[str]:
+        """24h USD hacmine göre top coinleri getir
+
+        Args:
+            limit: Kaç coin seçilecek (None = TÜM coinler)
+            min_volume_usd: Minimum 24h USD volume ($100K default)
+
+        Returns:
+            Coin sembolleri listesi (USDT pairs)
+        """
         try:
             url = f"{self.base_url}/api/v3/ticker/24hr"
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
 
             tickers = response.json()
+
+            # USDT çiftleri filtrele - minimum volume kontrolü
             usdt_pairs = [
                 t for t in tickers
-                if t['symbol'].endswith('USDT') and float(t['quoteVolume']) > 0
+                if t['symbol'].endswith('USDT') and float(t['quoteVolume']) >= min_volume_usd
             ]
+
+            # Hacme göre sırala
             usdt_pairs.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
-            return [t['symbol'] for t in usdt_pairs[:limit]]
+
+            # TÜM coinler veya top N
+            if limit is None:
+                logger.info(f"🌐 TÜM coinler taranacak (min volume: ${min_volume_usd:,.0f}): {len(usdt_pairs)} coin bulundu")
+                return [t['symbol'] for t in usdt_pairs]
+            else:
+                return [t['symbol'] for t in usdt_pairs[:limit]]
 
         except Exception as e:
             logger.warning(f"⚠️ Top coin seçimi başarısız: {e}")

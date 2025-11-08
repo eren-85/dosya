@@ -6,6 +6,8 @@
 
 - ✅ **Canlı Binance Spot verisi** (API key gerektirmez)
 - ✅ **USD bazlı hesaplama** (doğru karşılaştırma)
+- ✅ **Dinamik TÜM coin tarama** (statik top 30 değil!)
+- ✅ **Nakit akışına göre sıralama** (volume'e göre değil)
 - ✅ **3 farklı format**: Text, Tablo, HTML (interaktif)
 - ✅ **Telegram bot** komutları
 - ✅ **REST API** (opsiyonel)
@@ -13,9 +15,10 @@
 - ✅ **Top N coin** otomatik seçimi
 - ✅ **5 zaman dilimi** analizi (15m, 1h, 4h, 12h, 1d)
 - ✅ **Emoji göstergeleri** (🔼🔻)
-- ✅ **Market Hacim Payı** metriği
+- ✅ **Top 10 Dominance** metriği
 - ✅ **Momentum Score (MTS)** hesaplama
 - ✅ **HTML tooltips** (USD hacim, momentum detayları)
+- ✅ **Minimum volume filtresi** ($100K default)
 
 ---
 
@@ -432,6 +435,69 @@ pip install -r requirements.txt
 | 30 coin | ~30-45 sn |
 
 **İpucu:** Hızlı yanıt için `top_n=20` kullanın.
+
+---
+
+## 🔍 Gelişmiş Özellikler
+
+### Dinamik Coin Tarama
+
+Varsayılan olarak, sistem **TÜM Binance USDT çiftlerini** tarar ve nakit akışına göre sıralar. Bu, volume bazlı statik top 30 yerine, **dinamik cash flow** analizi sağlar.
+
+**Nasıl Çalışır:**
+1. Binance'den tüm USDT çiftlerini al
+2. Minimum volume filtresi uygula ($100K default)
+3. Her coin için nakit akışını hesapla
+4. **Nakit akışına göre sırala** (volume'e göre değil!)
+5. En yüksek nakit akışına sahip top N'i göster
+
+**Parametreler:**
+```python
+analyzer.analyze(
+    top_n=30,              # Kaç coin gösterilecek (5-50)
+    analyze_pool=None,     # None = TÜM coinler, 100 = top 100 by volume
+    min_volume_usd=100000  # Minimum 24h USD volume ($100K)
+)
+```
+
+**Örnek Senaryolar:**
+
+```python
+# Senaryo 1: TÜM coinleri tara (default)
+# - Tüm USDT çiftleri analiz edilir ($100K+ volume)
+# - Nakit akışına göre sıralanır
+# - Top 30 gösterilir
+report = analyzer.analyze(top_n=30)
+
+# Senaryo 2: Sadece büyük coinleri tara
+# - Top 100 coin (hacme göre) analiz edilir
+# - Nakit akışına göre sıralanır
+# - Top 20 gösterilir
+report = analyzer.analyze(top_n=20, analyze_pool=100)
+
+# Senaryo 3: Yüksek hacimli coinleri tara
+# - Minimum $1M volume filtresi
+# - Tüm coinler analiz edilir
+# - Top 50 gösterilir
+report = analyzer.analyze(top_n=50, min_volume_usd=1000000)
+```
+
+**Neden Bu Önemli?**
+
+Geleneksel yöntem (statik top 30):
+- ❌ Volume bazlı top 30 seçilir
+- ❌ Sadece bunlar analiz edilir
+- ❌ Ani nakit akışı olan düşük volume coinler kaçırılır
+- ❌ Market share hesabı hatalı (%100 çıkar)
+
+Yeni yöntem (dinamik tarama):
+- ✅ Tüm coinler analiz edilir
+- ✅ **Nakit akışına göre** sıralanır
+- ✅ Volume düşük ama nakit akışı yüksek coinler yakalanır
+- ✅ Gerçek market dinamikleri görülür
+
+**Örnek:**
+Diyelim ki XYZUSDT coin'i volume olarak 150. sırada ama aniden %80 alım baskısı aldı. Statik yöntem bunu görmez. Dinamik tarama ise nakit akışına göre sıraladığı için top 30'a girer ve size gösterir!
 
 ---
 
