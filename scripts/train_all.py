@@ -253,11 +253,22 @@ def main():
 
     input("\nPress ENTER to start training...")
 
-    # Train models
+    # Train models with progress bar
     results = []
     start_time = time.time()
 
-    for i, task in enumerate(training_tasks, 1):
+    # Progress bar for tasks
+    try:
+        from tqdm import tqdm
+        task_pbar = tqdm(enumerate(training_tasks, 1), total=len(training_tasks),
+                        desc="📋 Overall Progress", unit="task", ncols=100)
+    except ImportError:
+        task_pbar = enumerate(training_tasks, 1)
+
+    for i, task in task_pbar:
+        if hasattr(task_pbar, 'set_description'):
+            task_pbar.set_description(f"📋 Task {i}/{len(training_tasks)}: {task['model_type'].upper()} ({task['group_name']})")
+
         print(f"\n{'='*80}")
         print(f"📊 TASK {i}/{len(training_tasks)}")
         print(f"{'='*80}")
@@ -275,6 +286,17 @@ def main():
         )
 
         results.append(result)
+
+        # Update progress bar
+        if hasattr(task_pbar, 'set_postfix'):
+            status_icon = "✅" if result['status'] == 'success' else "❌"
+            task_pbar.set_postfix({
+                'status': status_icon,
+                'time': f"{result['elapsed']/60:.1f}m"
+            })
+
+    if hasattr(task_pbar, 'close'):
+        task_pbar.close()
 
     # Summary
     total_elapsed = time.time() - start_time

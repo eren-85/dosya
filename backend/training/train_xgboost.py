@@ -427,33 +427,88 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
         'tree_method': 'hist',
     }
 
-    # Training with early stopping
-    evals = [(dtrain, 'train'), (dval, 'val')]
+    # Validation set check
+    if len(X_val) > 0:
+        evals = [(dtrain, 'train'), (dval, 'val')]
+        early_stopping_rounds = 50
+    else:
+        evals = [(dtrain, 'train')]
+        early_stopping_rounds = None
+        print("   ⚠️  No validation set, skipping early stopping")
 
-    model = xgb.train(
-        params,
-        dtrain,
-        num_boost_round=n_estimators,
-        evals=evals,
-        early_stopping_rounds=50,
-        verbose_eval=50
-    )
+    # Training with progress bar
+    try:
+        from tqdm import tqdm
+
+        class ProgressCallback(xgb.callback.TrainingCallback):
+            def __init__(self, total_rounds):
+                self.pbar = tqdm(total=total_rounds, desc="🌳 XGBoost Training", unit="tree", ncols=100)
+                self.total_rounds = total_rounds
+
+            def after_iteration(self, model, epoch, evals_log):
+                self.pbar.update(1)
+                if evals_log:
+                    train_log = evals_log.get('train', {})
+                    if train_log:
+                        metric_key = list(train_log.keys())[0] if train_log else 'mlogloss'
+                        train_metric = train_log[metric_key][-1] if metric_key in train_log else 0
+                        postfix = {'train_loss': f'{train_metric:.4f}'}
+
+                        val_log = evals_log.get('val', {})
+                        if val_log and metric_key in val_log:
+                            val_metric = val_log[metric_key][-1]
+                            postfix['val_loss'] = f'{val_metric:.4f}'
+
+                        self.pbar.set_postfix(postfix)
+                return False
+
+            def after_training(self, model):
+                self.pbar.close()
+                return model
+
+        progress_callback = ProgressCallback(n_estimators)
+        callbacks = [progress_callback]
+
+        model = xgb.train(
+            params,
+            dtrain,
+            num_boost_round=n_estimators,
+            evals=evals,
+            early_stopping_rounds=early_stopping_rounds,
+            callbacks=callbacks,
+            verbose_eval=False
+        )
+    except (ImportError, AttributeError):
+        # Fallback if tqdm not available
+        model = xgb.train(
+            params,
+            dtrain,
+            num_boost_round=n_estimators,
+            evals=evals,
+            early_stopping_rounds=early_stopping_rounds,
+            verbose_eval=10
+        )
 
     # Evaluate
     train_pred = model.predict(dtrain)
-    val_pred = model.predict(dval)
-
     train_acc = accuracy_score(y_train, train_pred)
-    val_acc = accuracy_score(y_val, val_pred)
 
     print("-" * 60)
     print(f"✅ Training complete!")
     print(f"   Train accuracy: {train_acc:.3f}")
-    print(f"   Val accuracy: {val_acc:.3f}")
 
-    # Classification report
-    print("\n📊 Validation Classification Report:")
-    print(classification_report(y_val, val_pred))
+    # Validation evaluation (only if validation set exists)
+    if len(X_val) > 0:
+        val_pred = model.predict(dval)
+        val_acc = accuracy_score(y_val, val_pred)
+        print(f"   Val accuracy: {val_acc:.3f}")
+
+        # Classification report
+        print("\n📊 Validation Classification Report:")
+        print(classification_report(y_val, val_pred))
+    else:
+        val_acc = float('nan')
+        print(f"   Val accuracy: N/A (no validation set)")
 
     return model, train_acc, val_acc
 

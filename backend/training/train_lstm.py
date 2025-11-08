@@ -250,14 +250,29 @@ def train_model(
     print(f"   Val batches: {len(val_loader)}")
     print("-" * 60)
 
-    for epoch in range(epochs):
+    # Epoch progress bar
+    try:
+        from tqdm import tqdm
+        epoch_pbar = tqdm(range(epochs), desc="🧠 LSTM Training", unit="epoch", ncols=100)
+    except ImportError:
+        epoch_pbar = range(epochs)
+
+    for epoch in epoch_pbar:
         # Training phase
         model.train()
         train_loss = 0.0
         correct = 0
         total = 0
 
-        for X_batch, y_batch in train_loader:
+        # Batch progress bar
+        try:
+            from tqdm import tqdm
+            batch_pbar = tqdm(train_loader, desc=f"  Epoch {epoch+1}/{epochs} [Train]",
+                            leave=False, ncols=80)
+        except ImportError:
+            batch_pbar = train_loader
+
+        for X_batch, y_batch in batch_pbar:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
 
             # Forward pass
@@ -275,6 +290,13 @@ def train_model(
             predicted = (torch.sigmoid(outputs.squeeze()) > 0.5).float()
             correct += (predicted == y_batch).sum().item()
             total += y_batch.size(0)
+
+            # Update batch progress bar
+            if hasattr(batch_pbar, 'set_postfix'):
+                batch_pbar.set_postfix({
+                    'loss': f'{loss.item():.4f}',
+                    'acc': f'{correct/total:.3f}' if total > 0 else '0.000'
+                })
 
         train_loss /= len(train_loader)
         train_acc = correct / total
@@ -316,12 +338,31 @@ def train_model(
                 'val_loss': val_loss,
             }, 'best_model_checkpoint.pt')
 
-        # Print progress
+        # Update epoch progress bar
+        if hasattr(epoch_pbar, 'set_postfix'):
+            epoch_pbar.set_postfix({
+                'train_loss': f'{train_loss:.4f}',
+                'train_acc': f'{train_acc:.3f}',
+                'val_loss': f'{val_loss:.4f}',
+                'val_acc': f'{val_acc:.3f}',
+                'best': f'{best_val_loss:.4f}'
+            })
+
+        # Print progress (less verbose with progress bar)
         if (epoch + 1) % 10 == 0 or epoch == 0:
-            print(f"Epoch {epoch+1:3d}/{epochs} | "
-                  f"Train Loss: {train_loss:.4f} Acc: {train_acc:.3f} | "
-                  f"Val Loss: {val_loss:.4f} Acc: {val_acc:.3f} | "
-                  f"LR: {optimizer.param_groups[0]['lr']:.6f}")
+            if hasattr(epoch_pbar, 'write'):
+                epoch_pbar.write(f"Epoch {epoch+1:3d}/{epochs} | "
+                      f"Train Loss: {train_loss:.4f} Acc: {train_acc:.3f} | "
+                      f"Val Loss: {val_loss:.4f} Acc: {val_acc:.3f} | "
+                      f"LR: {optimizer.param_groups[0]['lr']:.6f}")
+            else:
+                print(f"Epoch {epoch+1:3d}/{epochs} | "
+                      f"Train Loss: {train_loss:.4f} Acc: {train_acc:.3f} | "
+                      f"Val Loss: {val_loss:.4f} Acc: {val_acc:.3f} | "
+                      f"LR: {optimizer.param_groups[0]['lr']:.6f}")
+
+    if hasattr(epoch_pbar, 'close'):
+        epoch_pbar.close()
 
     print("-" * 60)
     print(f"✅ Training complete! Best val loss: {best_val_loss:.4f}")
