@@ -40,27 +40,29 @@ class CashFlowAnalyzer:
         timeframe: str = '15m',
         top_n: int = 30,
         limit: int = 500,
-        format: str = 'text'
+        format: str = 'text',
+        analyze_pool: int = 100
     ) -> Dict[str, Any]:
         """
         Ana analiz fonksiyonu
 
         Args:
-            symbols: Analiz edilecek coinler (None = otomatik top N)
+            symbols: Analiz edilecek coinler (None = otomatik seçim)
             timeframe: Candle aralığı ('15m', '1h', '4h', '1d')
-            top_n: Otomatik seçimde kaç coin (5-50)
+            top_n: Raporda gösterilecek top N coin (5-50)
             limit: Kaç candle analiz edilecek (100-1000)
             format: Çıktı formatı ('text', 'table', 'html')
+            analyze_pool: Kaç coin analiz edilecek (varsayılan 100)
 
         Returns:
             Analiz raporu (dict)
         """
-        logger.info(f"🔍 Analiz başlatılıyor (timeframe={timeframe}, top_n={top_n})")
+        logger.info(f"🔍 Analiz başlatılıyor (pool={analyze_pool}, show_top={top_n})")
 
-        # Coin seçimi
+        # Coin seçimi - GENİŞ POOL (tüm coin'leri yakala)
         if symbols is None:
-            symbols = self._get_top_coins(top_n)
-            logger.info(f"📊 Top {len(symbols)} coin seçildi")
+            symbols = self._get_top_coins(analyze_pool)
+            logger.info(f"📊 {len(symbols)} coin analiz edilecek")
 
         # Veri çekme
         market_data = self._fetch_data(symbols, timeframe, limit)
@@ -72,9 +74,12 @@ class CashFlowAnalyzer:
         # Analiz
         metrics = self._calculate_metrics(market_data)
         flows = self._calculate_flows(market_data)
-        report = self._generate_report(metrics, flows, format)
 
-        logger.info("✅ Analiz tamamlandı")
+        # flows zaten cash_share'e göre sıralanmış
+        # top_n'i format fonksiyonlarına geçir
+        report = self._generate_report(metrics, flows, format, top_n)
+
+        logger.info(f"✅ Analiz tamamlandı ({len(flows)} coin analiz edildi, top {top_n} gösteriliyor)")
         return report
 
     def _get_top_coins(self, limit: int) -> List[str]:
@@ -224,16 +229,17 @@ class CashFlowAnalyzer:
         self,
         metrics: Dict[str, Any],
         flows: List[Dict[str, Any]],
-        format: str = 'text'
+        format: str = 'text',
+        top_n: int = 30
     ) -> Dict[str, Any]:
         """Rapor oluştur"""
         buyer_1d = metrics['timeframes'].get('1d', {}).get('buyer_percentage', 0)
 
-        # Calculate market share (top 30 coins' share in total market)
-        # Use total volume of all analyzed coins (24h period, same as flows)
-        total_market_volume = sum(f['total_volume'] for f in flows)
-        top_30_volume = sum(f['total_volume'] for f in flows[:30])
-        market_share = (top_30_volume / total_market_volume * 100) if total_market_volume > 0 else 0
+        # Calculate Top 10 Dominance (top 10 coin'in top_n içindeki payı)
+        # Daha anlamlı metrik: En büyük 10 coin ne kadar dominant?
+        total_top_n_volume = sum(f['total_volume'] for f in flows[:top_n])
+        top_10_volume = sum(f['total_volume'] for f in flows[:min(10, len(flows))])
+        top_10_dominance = (top_10_volume / total_top_n_volume * 100) if total_top_n_volume > 0 else 0
 
         # Risk
         if buyer_1d >= 50:
@@ -248,23 +254,23 @@ class CashFlowAnalyzer:
 
         # Format output
         if format == 'table':
-            formatted_output = self._format_table(metrics, flows, risk_msg, market_share)
+            formatted_output = self._format_table(metrics, flows[:top_n], risk_msg, top_10_dominance)
         elif format == 'html':
-            formatted_output = self._format_html(metrics, flows, risk_msg, market_share)
+            formatted_output = self._format_html(metrics, flows[:top_n], risk_msg, top_10_dominance)
         else:
-            formatted_output = self._format_text(metrics, flows, risk_msg)
+            formatted_output = self._format_text(metrics, flows[:top_n], risk_msg)
 
         return {
             'status': 'success',
             'timestamp': datetime.now().isoformat(),
             'market_metrics': metrics,
-            'market_share': market_share,
+            'top_10_dominance': top_10_dominance,
             'risk_assessment': {
                 'level': risk_level,
                 'message': risk_msg,
                 'buyer_1d': buyer_1d
             },
-            'top_flows': flows[:30],
+            'top_flows': flows[:top_n],
             'total_coins': len(flows),
             'text_report': formatted_output,
             'format': format
@@ -325,17 +331,17 @@ class CashFlowAnalyzer:
         metrics: Dict[str, Any],
         flows: List[Dict[str, Any]],
         risk_msg: str,
-        market_share: float
+        top_10_dominance: float
     ) -> str:
         """Tablo formatında rapor"""
         lines = [
             "=" * 95,
             "📊 Market Nakit Akışı Raporu - TABLO GÖRÜNÜMÜ",
-            "🔴 CANLI VERİ - Binance Spot",
+            "🟢 CANLI VERİ - Binance Spot",
             "=" * 95,
             "",
             f"Kısa Vadeli Market Alım Gücü: {metrics['short_term_power']:.1f}X",
-            f"Marketteki Hacim Payı: %{market_share:.1f}",
+            f"Top 10 Dominance: %{top_10_dominance:.1f}",
             ""
         ]
 
@@ -366,8 +372,8 @@ class CashFlowAnalyzer:
         lines.append("║  Coin ║ Nakit ║  15m% ║  MTS ║  15m  ║  1h   ║  4h   ║  12h  ║  1d   ║  Trend        ║")
         lines.append("╠═══════╬═══════╬═══════╬══════╬═══════╬═══════╬═══════╬═══════╬═══════╬═══════════════╣")
 
-        # Top 30 coins
-        for coin in flows[:30]:
+        # Top coins (already limited by caller)
+        for coin in flows:
             sym = coin['symbol'].replace('USDT', '')[:6].ljust(6)
             cash = f"{coin['cash_share']:5.1f}"
             pct_15m = f"{coin['buyer_15m']:5.1f}"
@@ -400,7 +406,7 @@ class CashFlowAnalyzer:
         metrics: Dict[str, Any],
         flows: List[Dict[str, Any]],
         risk_msg: str,
-        market_share: float
+        top_10_dominance: float
     ) -> str:
         """HTML formatında interaktif rapor"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -625,8 +631,8 @@ class CashFlowAnalyzer:
                 <div class="metric-value">{metrics['short_term_power']:.2f}X</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">Marketteki Hacim Payı</div>
-                <div class="metric-value">{market_share:.1f}%</div>
+                <div class="metric-label">Top 10 Dominance</div>
+                <div class="metric-value">{top_10_dominance:.1f}%</div>
             </div>"""
 
         # Add timeframe metrics
@@ -661,8 +667,8 @@ class CashFlowAnalyzer:
                 </thead>
                 <tbody>"""
 
-        # Add coin rows
-        for coin in flows[:30]:
+        # Add coin rows (already limited by caller)
+        for coin in flows:
             sym = coin['symbol'].replace('USDT', '')
             vol_usd = coin['total_volume']
 
@@ -742,11 +748,12 @@ class CashFlowAnalyzer:
                 </div>
 
                 <div class="info-card">
-                    <h4>📊 Marketteki Hacim Payı</h4>
+                    <h4>📊 Top 10 Dominance</h4>
                     <p>
-                        <strong>Formül:</strong> <code>(Top 30 volume / Tüm volume) × 100</code><br><br>
-                        Top 30 coin'in tüm analiz edilen coin'ler içindeki payı.<br>
-                        Genellikle %90-100 arası (büyük coin'ler hacmi domine ediyor).
+                        <strong>Formül:</strong> <code>(Top 10 volume / Top 30 volume) × 100</code><br><br>
+                        En büyük 10 coin'in, top 30 içindeki hacim payı.<br>
+                        Yüksek değer (%80+): Hacim birkaç büyük coin'de toplanmış.<br>
+                        Düşük değer (%60-): Hacim daha eşit dağılmış.
                     </p>
                 </div>
 

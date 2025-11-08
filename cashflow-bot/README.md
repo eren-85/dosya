@@ -133,16 +133,18 @@ Browser'da açılabilir, modern, interaktif rapor:
 - **>1.0X** = Kısa vadede alım momentumu artıyor 🔼
 - **<1.0X** = Kısa vadede alım momentumu düşüyor 🔻
 
-### **Marketteki Hacim Payı (Market Share)**
-**Formül:** `(Top 30 coin volume / Tüm analiz edilen coin volume) * 100`
+### **Top 10 Dominance**
+**Formül:** `(Top 10 coin volume / Top 30 coin volume) * 100`
 
 **Örnek:**
+- Top 10 coin'in 24h volume'ü: $100B
 - Top 30 coin'in 24h volume'ü: $120B
-- Tüm 30 coin'in 24h volume'ü: $120B
-- Sonuç: (120/120) * 100 = **%100**
+- Sonuç: (100/120) * 100 = **%83.3**
 
 **Anlamı:**
-Analiz edilen top 30 coin'in, tüm analiz edilen coin'ler içindeki hacim payı. Genellikle %90-100 arası olur (çünkü top coin'ler çoğu hacmi kapsıyor).
+En büyük 10 coin'in, top 30 içindeki hakimiyeti.
+- **%80+**: Hacim birkaç büyük coin'de toplanmış (BTC, ETH dominant)
+- **%60-70**: Hacim daha eşit dağılmış (altcoin season potansiyeli)
 
 ### **Nakit Payı (Cash Share)**
 **Formül:** `(Coin volume / Toplam market volume) * 100`
