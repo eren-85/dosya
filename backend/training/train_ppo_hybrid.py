@@ -360,10 +360,13 @@ class HybridTradingEnvironment(gym.Env):
             elif action != 0:  # Traded against high-confidence signal
                 ensemble_bonus = -3  # Penalty
 
-        # 4. Sharpe ratio bonus
-        if len(self.equity_curve) > 30:
-            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-30:-1]) + 1e-8)
-            sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
+        # 4. Sharpe ratio bonus (safer calculation)
+        ec = np.asarray(self.equity_curve, dtype=float)
+        if ec.size > 1:
+            # Dynamic window (30 days or available length)
+            n = min(30, ec.size - 1)
+            returns = np.diff(ec[-(n+1):]) / (ec[-(n+1):-1] + 1e-8)
+            sharpe = (returns.mean() / (returns.std() + 1e-6)) * np.sqrt(252)
             if sharpe > 2.0:
                 sharpe_bonus = 5
             elif sharpe > 1.0:
@@ -431,19 +434,26 @@ def load_ensemble_model(model_path: str) -> Tuple[xgb.Booster, list]:
 
 
 def load_data(symbol, timeframe, market='futures', data_dir='data/advanced'):
-    """Load advanced historical data from Parquet"""
+    """Load historical data from Parquet - supports multiple file patterns"""
 
-    filename = f"{symbol}_{timeframe}_{market}_binance.parquet"
-    filepath = Path(data_dir) / filename
+    data_dir = Path(data_dir)
 
-    if not filepath.exists():
-        raise FileNotFoundError(f"Data file not found: {filepath}")
+    # Try multiple file patterns in order
+    patterns = [
+        f"{symbol}_{timeframe}_{market}_multi.parquet",      # Multi-file format
+        f"{symbol}_{timeframe}_{market}_binance.parquet",    # Binance format
+        f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
+    ]
 
-    print(f"📂 Loading data from {filepath}")
-    df = pd.read_parquet(filepath)
+    for filename in patterns:
+        filepath = data_dir / filename
+        if filepath.exists():
+            print(f"📂 Loading data from {filepath}")
+            df = pd.read_parquet(filepath)
+            print(f"✅ Loaded {len(df)} candles with {len(df.columns)} features")
+            return df
 
-    print(f"✅ Loaded {len(df)} candles with {len(df.columns)} features")
-    return df
+    raise FileNotFoundError(f"No data file found. Tried: {', '.join(str(data_dir/x) for x in patterns)}")
 
 
 def main():
@@ -565,9 +575,13 @@ def main():
     print(f"   Number of trades: {num_trades}")
     print(f"   Ensemble agreement rate: {agreement_rate:.1%}")
 
-    # Calculate metrics
-    returns = np.diff(val_env.equity_curve) / (np.array(val_env.equity_curve[:-1]) + 1e-8)
-    sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
+    # Calculate metrics (safer calculation)
+    ec = np.asarray(val_env.equity_curve, dtype=float)
+    if ec.size > 1:
+        returns = np.diff(ec) / (ec[:-1] + 1e-8)
+        sharpe = (returns.mean() / (returns.std() + 1e-6)) * np.sqrt(252)
+    else:
+        sharpe = 0.0
     max_dd = (val_env.max_equity - np.min(val_env.equity_curve)) / val_env.max_equity
 
     print(f"   Sharpe ratio: {sharpe:.2f}")

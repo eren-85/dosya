@@ -339,10 +339,13 @@ class TradingEnvironment(gym.Env):
         else:
             freq_penalty = 0
 
-        # 4. Sharpe ratio bonus
-        if len(self.equity_curve) > 30:
-            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-30:-1]) + 1e-8)
-            sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
+        # 4. Sharpe ratio bonus (safer calculation)
+        ec = np.asarray(self.equity_curve, dtype=float)
+        if ec.size > 1:
+            # Dynamic window (30 days or available length)
+            n = min(30, ec.size - 1)
+            returns = np.diff(ec[-(n+1):]) / (ec[-(n+1):-1] + 1e-8)
+            sharpe = (returns.mean() / (returns.std() + 1e-6)) * np.sqrt(252)
             if sharpe > 2.0:
                 sharpe_bonus = 5
             elif sharpe > 1.0:
@@ -530,9 +533,13 @@ def main():
     print(f"   Total return: {total_return:+.2%}")
     print(f"   Number of trades: {num_trades}")
 
-    # Calculate Sharpe ratio
-    returns = np.diff(val_env.equity_curve) / (np.array(val_env.equity_curve[:-1]) + 1e-8)
-    sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
+    # Calculate Sharpe ratio (safer calculation)
+    ec = np.asarray(val_env.equity_curve, dtype=float)
+    if ec.size > 1:
+        returns = np.diff(ec) / (ec[:-1] + 1e-8)
+        sharpe = (returns.mean() / (returns.std() + 1e-6)) * np.sqrt(252)
+    else:
+        sharpe = 0.0
     max_dd = (val_env.max_equity - np.min(val_env.equity_curve)) / val_env.max_equity
 
     print(f"   Sharpe ratio: {sharpe:.2f}")

@@ -401,12 +401,16 @@ class MultiModalTradingEnvironment(gym.Env):
         drawdown = (self.max_equity - curr_equity) / self.max_equity
         risk_penalty = -10 if drawdown > 0.15 else (-5 if drawdown > 0.10 else 0)
 
-        # Sharpe bonus
-        sharpe_bonus = 0
-        if len(self.equity_curve) > 30:
-            returns = np.diff(self.equity_curve[-30:]) / (np.array(self.equity_curve[-30:-1]) + 1e-8)
-            sharpe = np.mean(returns) / (np.std(returns) + 1e-6) * np.sqrt(252)
+        # Sharpe bonus (safer calculation)
+        ec = np.asarray(self.equity_curve, dtype=float)
+        if ec.size > 1:
+            # Dynamic window (30 days or available length)
+            n = min(30, ec.size - 1)
+            returns = np.diff(ec[-(n+1):]) / (ec[-(n+1):-1] + 1e-8)
+            sharpe = (returns.mean() / (returns.std() + 1e-6)) * np.sqrt(252)
             sharpe_bonus = 5 if sharpe > 2.0 else (2 if sharpe > 1.0 else 0)
+        else:
+            sharpe_bonus = 0
 
         return pnl_reward + risk_penalty + sharpe_bonus
 
@@ -479,9 +483,24 @@ def main():
         args.symbol, args.timeframe, args.market, args.data_dir
     )
 
-    # Load data
-    data_file = Path(args.data_dir) / f"{args.symbol}_{args.timeframe}_{args.market}_binance.parquet"
-    df = pd.read_parquet(data_file)
+    # Load data - try multiple file patterns
+    data_dir = Path(args.data_dir)
+    patterns = [
+        f"{args.symbol}_{args.timeframe}_{args.market}_multi.parquet",      # Multi-file format
+        f"{args.symbol}_{args.timeframe}_{args.market}_binance.parquet",    # Binance format
+        f"{args.symbol}_{args.timeframe}_{args.market}.parquet",            # Basic format
+    ]
+
+    df = None
+    for filename in patterns:
+        data_file = data_dir / filename
+        if data_file.exists():
+            logger.info(f"📂 Loading data from {data_file}")
+            df = pd.read_parquet(data_file)
+            break
+
+    if df is None:
+        raise FileNotFoundError(f"No data file found. Tried: {', '.join(str(data_dir/x) for x in patterns)}")
 
     logger.info(f"✅ Loaded {len(df)} candles")
 
