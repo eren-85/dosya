@@ -141,8 +141,8 @@ def load_data(symbol, timeframe, market='futures', data_dir='data/advanced'):
 
     # Try multiple file patterns in order
     patterns = [
-        f"{symbol}_{timeframe}_{market}_binance.parquet",  # Advanced collector format
-        f"{symbol}_{timeframe}_{market}_multi.parquet",     # Multi-file format
+        f"{symbol}_{timeframe}_{market}_multi.parquet",      # Multi-file format (try first)
+        f"{symbol}_{timeframe}_{market}_binance.parquet",    # Advanced collector format
         f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
     ]
 

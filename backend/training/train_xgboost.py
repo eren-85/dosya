@@ -316,8 +316,8 @@ def load_data(symbol, timeframe, market='futures', data_dir='data/advanced'):
 
     # Try multiple file patterns in order
     patterns = [
-        f"{symbol}_{timeframe}_{market}_binance.parquet",  # Advanced collector format
-        f"{symbol}_{timeframe}_{market}_multi.parquet",     # Multi-file format
+        f"{symbol}_{timeframe}_{market}_multi.parquet",      # Multi-file format (try first)
+        f"{symbol}_{timeframe}_{market}_binance.parquet",    # Advanced collector format
         f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
     ]
 
@@ -466,9 +466,9 @@ def main():
     parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
     parser.add_argument('--timeframe', type=str, default='1h', help='Timeframe (e.g., 1h, 4h)')
     parser.add_argument('--market', type=str, default='futures', help='Market type (spot or futures)')
-    parser.add_argument('--task', type=str, default='pattern_classification',
+    parser.add_argument('--task', type=str, default='trend_classification',
                        choices=['pattern_classification', 'trend_classification'],
-                       help='Classification task')
+                       help='Classification task (trend_classification recommended)')
     parser.add_argument('--n-estimators', type=int, default=500, help='Number of trees')
     parser.add_argument('--max-depth', type=int, default=6, help='Maximum tree depth')
     parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
