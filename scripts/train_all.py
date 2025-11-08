@@ -73,7 +73,7 @@ CONFIGS = {
         "learning_rate": 0.1,
         "max_depth": 4,
         "tree_method": "auto",
-        "days": 60,
+        "days": None,  # Use all available data
     },
 
     "ensemble": {
