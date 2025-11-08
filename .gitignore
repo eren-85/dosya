@@ -51,6 +51,8 @@ env/
 # Data
 data/historical/*.csv
 data/historical/*.parquet
+data/advanced/*.csv
+data/advanced/*.parquet
 data/features/
 data/models/*.pkl
 data/models/*.pth
