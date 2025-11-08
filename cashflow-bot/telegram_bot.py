@@ -2,7 +2,9 @@
 Telegram Bot - Market Cash Flow
 
 Komutlar:
-/cashflow - Tam market analizi
+/cashflow - Tam market analizi (text)
+/table - Tablo formatında analiz
+/html - HTML formatında analiz (browser'da açılabilir)
 /risk - Sadece risk değerlendirmesi
 /top10 - Top 10 coin
 /help - Yardım
@@ -13,6 +15,8 @@ Kullanım:
 """
 
 import asyncio
+import os
+from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from cashflow_analyzer import CashFlowAnalyzer
@@ -26,7 +30,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📊 Market Cash Flow Bot'a Hoş Geldiniz!\n\n"
         "Komutlar:\n"
-        "/cashflow - Tam market analizi (30 coin)\n"
+        "/cashflow - Tam market analizi (text format)\n"
+        "/table - Tablo formatında analiz\n"
+        "/html - HTML formatında (browser'da açılabilir)\n"
         "/risk - Risk değerlendirmesi\n"
         "/top10 - Top 10 coin analizi\n"
         "/quick - Hızlı özet (10 coin)\n"
@@ -158,13 +164,80 @@ async def quick(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Hata: {str(e)}")
 
 
+async def table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tablo formatında analiz"""
+    await update.message.reply_text("📊 Tablo formatında analiz yapılıyor (30-45 saniye)...")
+
+    try:
+        report = analyzer.analyze(top_n=30, timeframe='15m', format='table')
+
+        if report['status'] == 'success':
+            text = report['text_report']
+
+            # Telegram 4096 karakter limiti
+            if len(text) > 4000:
+                chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+                for chunk in chunks:
+                    await update.message.reply_text(f"<pre>{chunk}</pre>", parse_mode='HTML')
+            else:
+                await update.message.reply_text(f"<pre>{text}</pre>", parse_mode='HTML')
+        else:
+            await update.message.reply_text(f"❌ Hata: {report.get('message')}")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Beklenmeyen hata: {str(e)}")
+
+
+async def html(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """HTML formatında analiz (dosya olarak gönder)"""
+    await update.message.reply_text("🌐 HTML raporu oluşturuluyor (30-45 saniye)...")
+
+    try:
+        report = analyzer.analyze(top_n=30, timeframe='15m', format='html')
+
+        if report['status'] == 'success':
+            html_content = report['text_report']
+
+            # Geçici HTML dosyası oluştur
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"cashflow_report_{timestamp}.html"
+            filepath = f"/tmp/{filename}"
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+            # Dosyayı gönder
+            with open(filepath, 'rb') as f:
+                await update.message.reply_document(
+                    document=f,
+                    filename=filename,
+                    caption="📊 Market Cash Flow Raporu\n\nBu dosyayı browser'da açarak interaktif raporu görebilirsiniz!"
+                )
+
+            # Geçici dosyayı sil
+            os.remove(filepath)
+
+            await update.message.reply_text(
+                "✅ HTML raporu gönderildi!\n\n"
+                "💡 İpucu: Dosyayı indirip browser'da açın. "
+                "Coin isimlerin üzerine geldiğinizde USD hacim ve momentum bilgilerini görebilirsiniz!"
+            )
+        else:
+            await update.message.reply_text(f"❌ Hata: {report.get('message')}")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Beklenmeyen hata: {str(e)}")
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Yardım"""
     help_text = """
 📊 **Market Cash Flow Bot**
 
 **Komutlar:**
-/cashflow - Tam analiz (30 coin, 30-45 sn)
+/cashflow - Tam analiz (30 coin, text format)
+/table - Tablo formatında analiz (düzenli görünüm)
+/html - HTML raporu (browser'da açılabilir, interaktif)
 /risk - Risk değerlendirmesi (hızlı)
 /top10 - Top 10 coin analizi
 /quick - Hızlı özet (5 coin, 10 sn)
@@ -173,12 +246,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔼 - Alım baskınlığı (%50+)
 🔻 - Satış baskınlığı (%50-)
 
+**Sütunlar:**
+• Nakit - Coin'in toplam hacim payı (%)
+• 15m% - 15 dakikalık alım yüzdesi
+• MTS - Momentum Score (1.0X = normal)
+• 15m, 1h, 4h, 12h, 1d - Her zaman dilimindeki trend (🔼/🔻)
+
 **Risk Seviyeleri:**
 🟢 LOW - Alım yapılabilir
 🟡 MEDIUM - Dikkatli olun
 🔴 HIGH - Piyasaya bulaşmayın
 
-**Veri:** Binance Spot (Canlı)
+**Veri:** Binance Spot (Canlı, USD bazlı)
 **Güncelleme:** Her komutta yeni veri
     """
     await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -199,13 +278,17 @@ def main():
     # Komutlar
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cashflow", cashflow))
+    app.add_handler(CommandHandler("table", table))
+    app.add_handler(CommandHandler("html", html))
     app.add_handler(CommandHandler("risk", risk))
     app.add_handler(CommandHandler("top10", top10))
     app.add_handler(CommandHandler("quick", quick))
     app.add_handler(CommandHandler("help", help_command))
 
     print("✅ Bot hazır! Komutlar:")
-    print("  /cashflow - Tam analiz")
+    print("  /cashflow - Tam analiz (text)")
+    print("  /table - Tablo formatı")
+    print("  /html - HTML raporu")
     print("  /risk - Risk değerlendirmesi")
     print("  /top10 - Top 10 coin")
     print("  /quick - Hızlı özet")

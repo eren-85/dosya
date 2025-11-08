@@ -6,12 +6,16 @@
 
 - ✅ **Canlı Binance Spot verisi** (API key gerektirmez)
 - ✅ **USD bazlı hesaplama** (doğru karşılaştırma)
+- ✅ **3 farklı format**: Text, Tablo, HTML (interaktif)
 - ✅ **Telegram bot** komutları
 - ✅ **REST API** (opsiyonel)
 - ✅ **Risk değerlendirmesi** (Low/Medium/High)
 - ✅ **Top N coin** otomatik seçimi
 - ✅ **5 zaman dilimi** analizi (15m, 1h, 4h, 12h, 1d)
 - ✅ **Emoji göstergeleri** (🔼🔻)
+- ✅ **Market Hacim Payı** metriği
+- ✅ **Momentum Score (MTS)** hesaplama
+- ✅ **HTML tooltips** (USD hacim, momentum detayları)
 
 ---
 
@@ -48,13 +52,47 @@ python api.py
 
 ## 📱 Telegram Komutları
 
-| Komut | Açıklama | Süre |
-|-------|----------|------|
-| `/cashflow` | Tam market analizi (30 coin) | 30-45 sn |
-| `/risk` | Risk değerlendirmesi | 10 sn |
-| `/top10` | Top 10 coin analizi | 15 sn |
-| `/quick` | Hızlı özet (5 coin) | 5-10 sn |
-| `/help` | Yardım | - |
+| Komut | Açıklama | Format | Süre |
+|-------|----------|--------|------|
+| `/cashflow` | Tam market analizi (30 coin) | Text | 30-45 sn |
+| `/table` | Tablo formatında analiz | Table | 30-45 sn |
+| `/html` | HTML raporu (browser'da açılabilir) | HTML | 30-45 sn |
+| `/risk` | Risk değerlendirmesi | Text | 10 sn |
+| `/top10` | Top 10 coin analizi | Text | 15 sn |
+| `/quick` | Hızlı özet (5 coin) | Text | 5-10 sn |
+| `/help` | Yardım ve açıklamalar | - | - |
+
+### 📊 Format Tipleri
+
+#### 1. **Text Format** (klasik)
+Basit metin formatında rapor. Telegram'da hızlıca okunabilir.
+
+#### 2. **Table Format** (yeni!)
+Tablo formatında düzenli görünüm:
+```
+╔═══════╦═══════╦═══════╦══════╦═══════╦═══════╦═══════╦═══════╦═══════╦═══════════════╗
+║  Coin ║ Nakit ║  15m% ║  MTS ║  15m  ║  1h   ║  4h   ║  12h  ║  1d   ║  Trend        ║
+╠═══════╬═══════╬═══════╬══════╬═══════╬═══════╬═══════╬═══════╬═══════╬═══════════════╣
+║ BTC   ║ %35.2 ║ %54.0 ║ 1.1X ║  🔼  ║  🔻  ║  🔼  ║  🔻  ║  🔼  ║ 🔼🔻🔼🔻🔼 ║
+```
+
+**Sütunlar:**
+- **Coin**: Coin adı (USDT hariç)
+- **Nakit**: Market hacim payı (%)
+- **15m%**: 15 dakikalık alım yüzdesi
+- **MTS**: Momentum Score (1.0X = normal, >1.0 = güçlü)
+- **15m, 1h, 4h, 12h, 1d**: Her zaman dilimindeki trend (🔼 = alım >%50, 🔻 = satış >%50)
+- **Trend**: Tüm zaman dilimlerinin özeti
+
+#### 3. **HTML Format** (interaktif!)
+Browser'da açılabilir, modern, interaktif rapor:
+- 🎨 Profesyonel gradient tasarım
+- 📊 Metrik kartları (hover efekti)
+- 🖱️ **Tooltip'ler**: Coin üzerine gelince USD hacim, momentum detayları görünür
+- 📱 Responsive tasarım
+- 🎯 Risk seviyesi renk kodlu
+
+**Kullanım:** `/html` komutu ile HTML dosyası indirilir, browser'da açılır.
 
 ---
 
