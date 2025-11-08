@@ -93,6 +93,18 @@ class MultiModalTradingEnvironment(gym.Env):
         # Add Ensemble predictions
         self._add_ensemble_predictions()
 
+        # Clean data BEFORE feature selection
+        # 1. Drop object columns explicitly
+        object_cols = self.df.select_dtypes(include=['object']).columns.tolist()
+        if object_cols:
+            self.df = self.df.drop(columns=object_cols)
+
+        # 2. Drop columns that are 100% NaN
+        self.df = self.df.dropna(axis=1, how='all')
+
+        # 3. Fill remaining NaN with forward/backward fill
+        self.df = self.df.ffill().bfill().fillna(0)
+
         # Feature columns - only numeric columns
         excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
         self.feature_cols = [
@@ -100,6 +112,9 @@ class MultiModalTradingEnvironment(gym.Env):
             if col not in excluded_cols
             and pd.api.types.is_numeric_dtype(self.df[col])
         ]
+
+        if not self.feature_cols:
+            raise ValueError("No numeric features found after cleaning! Check your data.")
 
         # Normalize features
         self.feature_means = self.df[self.feature_cols].mean()

@@ -348,6 +348,22 @@ def prepare_features(df, task='pattern_classification'):
     print("🔧 Calculating technical indicators...")
     df = calculate_indicators(df)
 
+    # Clean data BEFORE feature selection
+    # 1. Drop object columns explicitly
+    object_cols = df.select_dtypes(include=['object']).columns.tolist()
+    if object_cols:
+        print(f"🗑️  Dropping {len(object_cols)} object columns")
+        df = df.drop(columns=object_cols)
+
+    # 2. Drop columns that are 100% NaN
+    nan_cols = df.columns[df.isna().all()].tolist()
+    if nan_cols:
+        print(f"🗑️  Dropping {len(nan_cols)} fully NaN columns")
+        df = df.drop(columns=nan_cols)
+
+    # 3. Fill remaining NaN with forward/backward fill
+    df = df.ffill().bfill().fillna(0)
+
     # Feature columns (exclude raw OHLCV and non-numeric columns)
     excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
     feature_cols = [
@@ -355,6 +371,9 @@ def prepare_features(df, task='pattern_classification'):
         if col not in excluded_cols
         and pd.api.types.is_numeric_dtype(df[col])
     ]
+
+    if not feature_cols:
+        raise ValueError("No numeric features found after cleaning! Check your data.")
 
     print(f"📊 Using {len(feature_cols)} features")
 
