@@ -63,10 +63,10 @@ def main():
     print(f"🎯 Epochs: {args.epochs}")
 
     # Get LSTM hyperparams
-    seq_len = hyperparams.get('seq_len', 128)
-    hidden_size = hyperparams.get('hidden_size', 256)
+    seq_length = hyperparams.get('seq_len', 60)  # Use default 60 to match train_lstm.py
+    hidden_size = hyperparams.get('hidden_size', 128)
     num_layers = hyperparams.get('num_layers', 2)
-    dropout = hyperparams.get('dropout', 0.2)
+    batch_size = hyperparams.get('batch_size', 32)
     learning_rate = hyperparams.get('learning_rate', 1e-3)
 
     # Build command for actual training script
@@ -76,12 +76,12 @@ def main():
         '--timeframe', timeframe,
         '--market', market,
         '--epochs', str(args.epochs),
-        '--seq-len', str(seq_len),
+        '--seq-length', str(seq_length),  # Fixed: was --seq-len, now --seq-length
         '--hidden-size', str(hidden_size),
         '--num-layers', str(num_layers),
-        '--dropout', str(dropout),
-        '--learning-rate', str(learning_rate),
-        '--device', args.device,
+        '--batch-size', str(batch_size),
+        '--lr', str(learning_rate),  # Fixed: was --learning-rate, now --lr
+        '--data-dir', 'data/advanced',
         '--output-dir', 'data/models',
     ]
 

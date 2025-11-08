@@ -60,15 +60,22 @@ def main():
     print(f"\n🎓 Training Ensemble on: {symbol} {timeframe} {market}")
     print(f"📊 Using {len(data_files)} data file(s)")
     print(f"📁 Output: {args.output_name}")
-    print(f"🎯 Models: XGBoost + LightGBM + CatBoost")
+    print(f"🎯 Models: XGBoost (standalone, no hybrid PPO)")
 
-    # Build command for hybrid PPO training (includes ensemble)
+    # Build command for XGBoost training (simpler than hybrid)
+    n_estimators = hyperparams.get('xgboost', {}).get('n_estimators', 1200)
+    max_depth = hyperparams.get('xgboost', {}).get('max_depth', 6)
+    learning_rate = hyperparams.get('xgboost', {}).get('learning_rate', 0.05)
+
     cmd = [
-        'python', '-m', 'backend.training.train_ppo_hybrid',
+        'python', '-m', 'backend.training.train_xgboost',
         '--symbol', symbol,
         '--timeframe', timeframe,
-        '--market', market,
-        '--total-timesteps', '100000',  # Minimal for quick ensemble-only training
+        '--task', 'pattern_classification',
+        '--n-estimators', str(n_estimators),
+        '--max-depth', str(max_depth),
+        '--lr', str(learning_rate),
+        '--data-dir', 'data/advanced',
         '--output-dir', 'data/models',
     ]
 
@@ -78,7 +85,7 @@ def main():
 
     if result.returncode == 0:
         print(f"\n✅ Training complete!")
-        print(f"📁 Model saved to: data/models/{symbol}_{timeframe}_{market}_ensemble_*.joblib")
+        print(f"📁 Model saved to: data/models/{symbol}_{timeframe}_xgboost_*.json")
     else:
         print(f"\n❌ Training failed with code {result.returncode}")
 

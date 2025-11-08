@@ -16,6 +16,13 @@ Features:
 
 import os
 import sys
+import io
+
+# Fix Windows encoding issue (support emojis)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import argparse
 import pandas as pd
 import numpy as np
@@ -304,11 +311,17 @@ def classify_trend(df):
     return np.array(trends[:len(df)])
 
 
-def load_data(symbol, timeframe, data_dir='data/historical'):
+def load_data(symbol, timeframe, market='futures', data_dir='data/historical'):
     """Load historical data from Parquet"""
 
-    filename = f"{symbol}_{timeframe}_futures.parquet"
+    # Try advanced collector format first (_multi.parquet)
+    filename = f"{symbol}_{timeframe}_{market}_multi.parquet"
     filepath = Path(data_dir) / filename
+
+    # Fallback to old format if not found
+    if not filepath.exists():
+        filename = f"{symbol}_{timeframe}_{market}.parquet"
+        filepath = Path(data_dir) / filename
 
     if not filepath.exists():
         raise FileNotFoundError(f"Data file not found: {filepath}")
@@ -427,6 +440,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train XGBoost model')
     parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
     parser.add_argument('--timeframe', type=str, default='1h', help='Timeframe (e.g., 1h, 4h)')
+    parser.add_argument('--market', type=str, default='futures', help='Market type (spot or futures)')
     parser.add_argument('--task', type=str, default='pattern_classification',
                        choices=['pattern_classification', 'trend_classification'],
                        help='Classification task')
@@ -455,7 +469,7 @@ def main():
     print()
 
     # 1. Load data
-    df = load_data(args.symbol, args.timeframe, args.data_dir)
+    df = load_data(args.symbol, args.timeframe, args.market, args.data_dir)
 
     # 2. Prepare features
     X, y, scaler, feature_cols = prepare_features(df, args.task)
