@@ -130,6 +130,14 @@ class MarketCashFlowAnalyzer:
                 # Load parquet
                 df = pd.read_parquet(file_path)
 
+                # Normalize column names (handle different naming conventions)
+                # Binance uses: open_time, taker_base
+                # We expect: timestamp, taker_buy_base
+                if 'open_time' in df.columns and 'timestamp' not in df.columns:
+                    df['timestamp'] = df['open_time']
+                if 'taker_base' in df.columns and 'taker_buy_base' not in df.columns:
+                    df['taker_buy_base'] = df['taker_base']
+
                 # Filter recent data
                 if len(df) > limit:
                     df = df.tail(limit)
@@ -137,12 +145,19 @@ class MarketCashFlowAnalyzer:
                 # Validate required columns
                 required = ['timestamp', 'volume', 'close', 'taker_buy_base']
                 if not all(col in df.columns for col in required):
-                    logger.warning(f"⚠️ {symbol}: Missing required columns")
+                    missing = [c for c in required if c not in df.columns]
+                    logger.warning(f"⚠️ {symbol}: Missing required columns: {missing}")
                     continue
 
                 # Ensure timestamp is datetime
                 if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-                    df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+
+                # Ensure numeric columns are numeric
+                numeric_cols = ['volume', 'close', 'taker_buy_base', 'open', 'high', 'low']
+                for col in numeric_cols:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
 
                 market_data[symbol] = df
                 logger.debug(f"✓ Loaded {symbol}: {len(df)} candles")
@@ -360,10 +375,10 @@ class MarketCashFlowAnalyzer:
                 'market_volume_share': round(market_share, 1),
                 'timeframes': {
                     tf: {
-                        'buyer_percentage': round(data['buyer_percentage'], 1),
-                        'indicator': '🔼' if data['buyer_percentage'] >= 50 else '🔻'
+                        'buyer_percentage': round(data.get('buyer_percentage', 0), 1),
+                        'indicator': '🔼' if data.get('buyer_percentage', 0) >= 50 else '🔻'
                     }
-                    for tf, data in market_metrics['timeframes'].items()
+                    for tf, data in market_metrics.get('timeframes', {}).items()
                 }
             },
             'risk_assessment': {
@@ -401,9 +416,9 @@ class MarketCashFlowAnalyzer:
         lines.append("")
 
         # Timeframe buyer percentages
-        for tf, data in market_metrics['timeframes'].items():
-            pct = data['buyer_percentage']
-            indicator = data['indicator']
+        for tf, data in market_metrics.get('timeframes', {}).items():
+            pct = data.get('buyer_percentage', 0)
+            indicator = '🔼' if pct >= 50 else '🔻'
             lines.append(f"{tf}=> %{pct:.1f} {indicator}")
 
         lines.append("")
