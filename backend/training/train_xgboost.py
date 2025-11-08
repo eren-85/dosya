@@ -333,7 +333,7 @@ def load_data(symbol, timeframe, data_dir='data/historical'):
             f"Tried: {', '.join(possible_filenames)}"
         )
 
-    print(f"📂 Loading data from {filepath}")
+    print(f"[*] Loading data from {filepath}")
 
     # Dosya uzantısına göre yükle
     if filepath.suffix == '.parquet':
@@ -349,21 +349,21 @@ def load_data(symbol, timeframe, data_dir='data/historical'):
         raise ValueError(f"Data must have columns: {required_cols}")
 
     # Convert price columns to numeric (fix string data types)
-    print("🔧 Converting data types...")
+    print("[*] Converting data types...")
     for col in required_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
     # Drop any rows with NaN values after conversion
     df.dropna(subset=required_cols, inplace=True)
 
-    print(f"✅ Loaded {len(df)} candles")
+    print(f"[OK] Loaded {len(df)} candles")
     return df
 
 
 def prepare_features(df, task='pattern_classification'):
     """Prepare features and target for training"""
 
-    print("🔧 Calculating technical indicators...")
+    print("[*] Calculating technical indicators...")
     df = calculate_indicators(df)
 
     # Feature columns (exclude raw OHLCV)
@@ -381,7 +381,7 @@ def prepare_features(df, task='pattern_classification'):
         print(f"   Found {len(set(y))} pattern types: {set(y)}")
 
     elif task == 'trend_classification':
-        print("📈 Classifying trends...")
+        print("[*] Classifying trends...")
         y = classify_trend(df)
         print(f"   Trend distribution: {np.bincount(y)}")
 
@@ -395,7 +395,7 @@ def prepare_features(df, task='pattern_classification'):
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    print(f"✅ Prepared data: X={X_scaled.shape}, y={y.shape}")
+    print(f"[OK] Prepared data: X={X_scaled.shape}, y={y.shape}")
 
     return X_scaled, y, scaler, feature_cols
 
@@ -403,7 +403,7 @@ def prepare_features(df, task='pattern_classification'):
 def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, learning_rate=0.1):
     """Train XGBoost model"""
 
-    print(f"\n🚀 Starting XGBoost training...")
+    print(f"\n[>>] Starting XGBoost training...")
     print(f"   Estimators: {n_estimators}")
     print(f"   Max depth: {max_depth}")
     print(f"   Learning rate: {learning_rate}")
@@ -434,7 +434,7 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
     else:
         evals = [(dtrain, 'train')]
         early_stopping_rounds = None
-        print("   ⚠️  No validation set, skipping early stopping")
+        print("   [WARN] No validation set, skipping early stopping")
 
     # Training with progress bar
     try:
@@ -442,7 +442,7 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
 
         class ProgressCallback(xgb.callback.TrainingCallback):
             def __init__(self, total_rounds):
-                self.pbar = tqdm(total=total_rounds, desc="🌳 XGBoost Training", unit="tree", ncols=100)
+                self.pbar = tqdm(total=total_rounds, desc="[*] XGBoost Training", unit="tree", ncols=100)
                 self.total_rounds = total_rounds
 
             def after_iteration(self, model, epoch, evals_log):
@@ -494,7 +494,7 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
     train_acc = accuracy_score(y_train, train_pred)
 
     print("-" * 60)
-    print(f"✅ Training complete!")
+    print(f"[OK] Training complete!")
     print(f"   Train accuracy: {train_acc:.3f}")
 
     # Validation evaluation (only if validation set exists)
@@ -626,10 +626,10 @@ def main():
     print(f"   Metadata: {metadata_path}")
     print()
     print("=" * 60)
-    print("✅ TRAINING COMPLETE!")
+    print("[OK] TRAINING COMPLETE!")
     print("=" * 60)
     print()
-    print("🎯 Next steps:")
+    print("[*] Next steps:")
     print("   1. Test the model with new data")
     print("   2. Integrate into prediction pipeline")
     print("   3. Monitor performance in production")
