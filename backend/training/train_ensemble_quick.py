@@ -35,7 +35,7 @@ def main():
     data_files = [f.strip() for f in args.data_files.split(',')]
 
     if not data_files:
-        print("❌ No data files provided")
+        print("[ERROR] No data files provided")
         return 1
 
     # For multi-file training, use the first file's symbol/timeframe/market
@@ -43,7 +43,7 @@ def main():
     parts = first_file.stem.split('_')
 
     if len(parts) < 3:
-        print(f"❌ Invalid filename format: {first_file.stem}")
+        print(f"[ERROR] Invalid filename format: {first_file.stem}")
         print("   Expected: SYMBOL_TF_MARKET_multi.parquet")
         return 1
 
@@ -51,10 +51,10 @@ def main():
     timeframe = parts[1]
     market = parts[2]
 
-    print(f"\n🎓 Training Ensemble on: {symbol} {timeframe} {market}")
-    print(f"📊 Using {len(data_files)} data file(s)")
-    print(f"📁 Output: {args.output_name}")
-    print(f"🎯 Models: XGBoost (standalone)")
+    print(f"\n[*] Training Ensemble on: {symbol} {timeframe} {market}")
+    print(f"[*] Using {len(data_files)} data file(s)")
+    print(f"[*] Output: {args.output_name}")
+    print(f"[*] Models: XGBoost (standalone)")
 
     # Build command for XGBoost training
     n_estimators = hyperparams.get('xgboost', {}).get('n_estimators', 200)
@@ -78,10 +78,10 @@ def main():
 
     if days is not None:
         cmd.extend(['--days', str(days)])
-        print(f"   ⚡ Using last {days} days of data for faster training")
+        print(f"   [!] Using last {days} days of data for faster training")
 
     # Run training
-    print(f"\n🚀 Starting ensemble training...")
+    print(f"\n[>>] Starting ensemble training...")
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -102,10 +102,10 @@ def main():
         print(result.stderr, file=sys.stderr)
 
     if result.returncode == 0:
-        print(f"\n✅ Training complete!")
-        print(f"📁 Model saved to: data/models/xgboost_*_{symbol}_{timeframe}_*.json")
+        print(f"\n[OK] Training complete!")
+        print(f"[*] Model saved to: data/models/xgboost_*_{symbol}_{timeframe}_*.json")
     else:
-        print(f"\n❌ Training failed with code {result.returncode}")
+        print(f"\n[FAIL] Training failed with code {result.returncode}")
         if result.stderr:
             print(f"Error: {result.stderr[:500]}")
 
