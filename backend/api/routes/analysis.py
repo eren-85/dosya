@@ -25,6 +25,7 @@ except ImportError:
 # Market Cash Flow Analyzer
 try:
     from backend.analysis.market_cash_flow import MarketCashFlowAnalyzer
+    from backend.analysis.live_cash_flow import LiveMarketCashFlowAnalyzer
     CASH_FLOW_AVAILABLE = True
 except ImportError:
     CASH_FLOW_AVAILABLE = False
@@ -55,10 +56,12 @@ class QuickAnalysisRequest(BaseModel):
 
 class CashFlowRequest(BaseModel):
     """Market cash flow analysis request"""
-    symbols: Optional[List[str]] = Field(None, description="List of symbols (None = all available)")
-    timeframe: str = Field("15min", description="Base timeframe for analysis")
-    limit: int = Field(500, ge=100, le=2000, description="Number of candles to analyze")
+    symbols: Optional[List[str]] = Field(None, description="List of symbols (None = auto-select top coins)")
+    timeframe: str = Field("15m", description="Candle timeframe: 15m, 1h, 4h, 12h, 1d")
+    limit: int = Field(500, ge=100, le=1500, description="Number of candles to analyze")
+    top_n: int = Field(30, ge=5, le=50, description="Number of top coins to analyze (if symbols=None)")
     format: str = Field("json", pattern="^(json|text)$", description="Output format")
+    live: bool = Field(True, description="Use live Binance data (True) or local parquet files (False)")
 
 
 class AnalysisResponse(BaseModel):
@@ -205,13 +208,24 @@ async def cash_flow_analysis(req: CashFlowRequest):
         )
 
     try:
-        analyzer = MarketCashFlowAnalyzer(data_dir="data")
-
-        report = analyzer.analyze_market(
-            symbols=req.symbols,
-            base_timeframe=req.timeframe,
-            limit=req.limit
-        )
+        # Choose analyzer based on live parameter
+        if req.live:
+            # Live data from Binance (recommended for bots)
+            analyzer = LiveMarketCashFlowAnalyzer()
+            report = analyzer.analyze_market(
+                symbols=req.symbols,
+                timeframe=req.timeframe,
+                limit=req.limit,
+                top_n=req.top_n
+            )
+        else:
+            # Local parquet files (requires pre-downloaded data)
+            analyzer = MarketCashFlowAnalyzer(data_dir="data")
+            report = analyzer.analyze_market(
+                symbols=req.symbols,
+                base_timeframe=req.timeframe,
+                limit=req.limit
+            )
 
         if report.get('status') == 'error':
             raise HTTPException(status_code=500, detail=report.get('message'))
