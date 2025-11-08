@@ -1,207 +1,115 @@
-# ⚡ Hızlı Başlangıç - 15 Dakikada Sigma Analyst
+# Quick Start - Copy-Paste Installation
 
-Bu rehber, sistemi **en hızlı şekilde** çalıştırmanızı sağlar.
-
----
-
-## 📋 Ön Hazırlık (5 dakika)
-
-### 1. Docker Desktop Çalıştırın
+## Windows 11 + Python 3.12.3 + RTX 4060
 
 ```powershell
-# Docker Desktop'ın açık olduğunu kontrol edin
-docker --version
+# ============================================================================
+# STEP 1: Upgrade pip
+# ============================================================================
+python -m pip install -U pip setuptools wheel
+
+# ============================================================================
+# STEP 2: Install PyTorch with CUDA 12.4 (CRITICAL - DO THIS FIRST!)
+# ============================================================================
+python -m pip uninstall -y torch torchvision torchaudio
+python -m pip cache purge
+python -m pip install --index-url https://download.pytorch.org/whl/cu124 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
+
+# ============================================================================
+# STEP 3: Verify GPU support
+# ============================================================================
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+
+# Expected output: CUDA: True, GPU: NVIDIA GeForce RTX 4060
+
+# ============================================================================
+# STEP 4: Lock NumPy 2.x stack
+# ============================================================================
+python -m pip install numpy==2.2.6 pandas==2.3.3 scipy==1.14.1
+
+# ============================================================================
+# STEP 5: Install all requirements
+# ============================================================================
+python -m pip install -r requirements.txt
+
+# ============================================================================
+# STEP 6: Verify installation
+# ============================================================================
+python -c "import torch, transformers, stable_baselines3, gymnasium; print('✅ All core packages installed!')"
+
+# ============================================================================
+# DONE! Now you can use the system:
+# ============================================================================
+
+# Download market data
+python scripts/download_all.py
+
+# Collect advanced features
+python scripts/collect_all.py
+
+# Train models
+python scripts/train_all.py
+
+# Or train multi-modal PPO (with vision)
+python -m backend.training.train_multimodal_ppo --symbol BTCUSDT --timeframe 1h --market futures --use-visual
+
+# Run backend
+python -m backend.main
+
+# Run frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-✅ Çıktı: `Docker version 27.x.x`
-
----
-
-### 2. .env Dosyası Oluşturun
+## Alternative: CUDA 12.1
 
 ```powershell
-# Proje klasörüne gidin
-cd D:\3\dosya
-
-# .env dosyasını kopyalayın
-Copy-Item .env.example .env
-
-# Düzenleyin (sadece 2 satır gerekli!)
-notepad .env
+# If you have CUDA 12.1 instead of 12.4, use this in STEP 2:
+python -m pip install --index-url https://download.pytorch.org/whl/cu121 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 ```
 
-**Minimum .env (sadece şu 2 satırı değiştirin):**
-```env
-POSTGRES_PASSWORD=SizinSifreniz123!
-ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxx
-```
+## Troubleshooting
 
-💡 **Anthropic API key almanız 2 dakika sürer:** https://console.anthropic.com/settings/keys
-
----
-
-## 🚀 Başlatma (10 dakika)
-
-### 3. Container'ları Başlatın
+### PyTorch installs CPU version instead of GPU
 
 ```powershell
-docker-compose up -d --build
+# Force uninstall everything
+pip uninstall -y torch torchvision torchaudio
+
+# Clear pip cache completely
+pip cache purge
+
+# Re-install with CUDA (with --no-cache-dir to prevent using cached CPU wheel)
+python -m pip install --index-url https://download.pytorch.org/whl/cu124 --no-cache-dir --force-reinstall torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 ```
 
-⏳ **İlk çalıştırmada 10-15 dakika sürer** (paketler indiriliyor).
-
-Çıktı:
-```
-[+] Building 125.3s ...
-[+] Running 6/6
- ✔ Container sigma_postgres      Started
- ✔ Container sigma_redis         Started
- ✔ Container sigma_backend       Started
- ✔ Container sigma_celery_worker Started
- ✔ Container sigma_flower        Started
-```
-
----
-
-### 4. Test Edin
-
-**API test:**
-```
-http://localhost:8000/docs
-```
-
-→ Swagger UI görmelisiniz ✅
-
-**Celery izleme:**
-```
-http://localhost:5555
-```
-
-→ Flower dashboard görmelisiniz ✅
-
----
-
-## 🎯 İlk Analiz (5 dakika)
-
-### 5. Oneshot Analiz
+### NumPy version conflicts after installing vision packages
 
 ```powershell
-# Backend container'ına girin
-docker-compose exec backend bash
+# Uninstall problematic packages
+pip uninstall -y ultralytics paddleocr paddlepaddle layoutparser
 
-# Bitcoin analizi yapın
-python -m backend.cli analyze --symbols BTCUSDT --mode oneshot
+# Force reinstall NumPy 2.x
+pip uninstall -y numpy
+pip install "numpy==2.2.6" --no-cache-dir --force-reinstall
+
+# Reinstall requirements (will skip Windows-incompatible packages)
+pip install -r requirements.txt
 ```
 
-**Çıktı:**
-```
-🤖 Sigma Analyst - Market Analysis
-═══════════════════════════════════
+### Training fails with UTF-8 encoding errors
 
-📊 Symbol: BTCUSDT
-⏰ Timeframes: 1H, 4H, 1D
+This is already fixed in all training scripts. If you still get errors, ensure:
+- Console encoding is UTF-8
+- Run: \`chcp 65001\` in PowerShell before training
 
-⏳ Collecting data... ✅
-⏳ Feature engineering... ✅
-⏳ Model inference... ✅
-⏳ Claude reasoning... ✅
-
-═══════════════════════════════════
-📈 MARKET PULSE
-═══════════════════════════════════
-
-**BTCUSDT: BULLISH BIAS** 🟢
-...
-(detaylı analiz)
-...
-```
-
-✅ **İlk analiz tamamlandı!**
-
----
-
-## 📚 Sonraki Adımlar
-
-Artık sisteminiz çalışıyor! Şunları yapabilirsiniz:
-
-### 1. Model Eğitimi
-
-```bash
-# Tarihsel veri indirin (container içindeyken)
-python -m backend.data.collectors.binance_collector download \
-  --symbol BTCUSDT --interval 1h --start 2023-01-01 --end 2024-12-31
-
-# Model eğitin
-python -m backend.models.train \
-  --data data/features/BTCUSDT_1h_features.parquet \
-  --model ensemble \
-  --device cuda
-```
-
----
-
-### 2. Backtest
-
-```bash
-python -m backend.backtest.backtest_engine run \
-  --strategy ensemble \
-  --symbol BTCUSDT \
-  --start 2023-01-01 \
-  --end 2024-12-31
-```
-
----
-
-### 3. Monitor Mode (sürekli izleme)
-
-```bash
-python -m backend.cli monitor \
-  --symbols BTCUSDT \
-  --freq 15m
-```
-
-**Durdurma:** `Ctrl+C`
-
----
-
-## 🛑 Durdurma
+### Multi-modal PPO fails with "backend.vision module not found"
 
 ```powershell
-# Geçici durdur
-docker-compose stop
+# Install vision dependencies
+pip install ultralytics opencv-python layoutparser pillow matplotlib plotly
 
-# Tekrar başlat
-docker-compose start
-
-# Tamamen sil (veriler kalır)
-docker-compose down
+# For Qwen2.5-VL (VLM)
+pip install transformers accelerate einops sentencepiece
 ```
-
----
-
-## 🆘 Sorun mu var?
-
-**Container çalışmıyor?**
-```powershell
-docker-compose logs -f backend
-```
-
-**Port hatası?**
-```powershell
-netstat -ano | findstr :8000
-taskkill /PID <PID> /F
-```
-
-**Detaylı sorun giderme:** [DOCKER_SETUP_GUIDE.md#10-sorun-giderme](DOCKER_SETUP_GUIDE.md#10-sorun-giderme)
-
----
-
-## 📖 Tam Rehber
-
-**Tüm özellikleri öğrenmek için:**
-- [DOCKER_SETUP_GUIDE.md](DOCKER_SETUP_GUIDE.md) - Detaylı kurulum ve kullanım
-- [README.md](README.md) - Genel proje bilgisi
-
----
-
-**Made with 🧠 and 📊 for smarter crypto trading**

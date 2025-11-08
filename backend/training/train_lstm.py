@@ -15,6 +15,13 @@ Features:
 
 import os
 import sys
+import io
+
+# Fix Windows encoding issue (support emojis)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import argparse
 import pandas as pd
 import numpy as np
@@ -129,25 +136,35 @@ def create_sequences(data, target, seq_length=60):
     return np.array(X), np.array(y)
 
 
-def load_data(symbol, timeframe, data_dir='data/historical'):
+def load_data(symbol, timeframe, market='futures', data_dir='data/advanced'):
     """Load historical data from Parquet"""
 
-    filename = f"{symbol}_{timeframe}_futures.parquet"
-    filepath = Path(data_dir) / filename
+    # Try multiple file patterns in order
+    patterns = [
+        f"{symbol}_{timeframe}_{market}_multi.parquet",      # Multi-file format (try first)
+        f"{symbol}_{timeframe}_{market}_binance.parquet",    # Advanced collector format
+        f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
+    ]
 
-    if not filepath.exists():
-        raise FileNotFoundError(f"Data file not found: {filepath}")
+    for filename in patterns:
+        filepath = Path(data_dir) / filename
+        if filepath.exists():
+            print(f"📂 Loading data from {filepath}")
+            df = pd.read_parquet(filepath)
 
-    print(f"📂 Loading data from {filepath}")
-    df = pd.read_parquet(filepath)
+            # Ensure required columns exist
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                raise ValueError(f"Data must have columns: {required_cols}")
 
-    # Ensure required columns exist
-    required_cols = ['open', 'high', 'low', 'close', 'volume']
-    if not all(col in df.columns for col in required_cols):
-        raise ValueError(f"Data must have columns: {required_cols}")
+            print(f"✅ Loaded {len(df)} candles")
+            return df
 
-    print(f"✅ Loaded {len(df)} candles")
-    return df
+    # If none found, raise error
+    raise FileNotFoundError(
+        f"Data file not found for {symbol}_{timeframe}_{market} in {data_dir}. "
+        f"Tried patterns: {patterns}"
+    )
 
 
 def prepare_features(df, seq_length=60):
@@ -156,11 +173,32 @@ def prepare_features(df, seq_length=60):
     print("🔧 Calculating technical indicators...")
     df = calculate_indicators(df)
 
-    # Feature columns (exclude raw OHLCV, keep only indicators)
-    feature_cols = [col for col in df.columns if col not in [
-        'open', 'high', 'low', 'close', 'volume',
-        'open_time', 'close_time', 'timestamp'
-    ]]
+    # Clean data BEFORE feature selection
+    # 1. Drop object columns explicitly
+    object_cols = df.select_dtypes(include=['object']).columns.tolist()
+    if object_cols:
+        print(f"🗑️  Dropping {len(object_cols)} object columns")
+        df = df.drop(columns=object_cols)
+
+    # 2. Drop columns that are 100% NaN
+    nan_cols = df.columns[df.isna().all()].tolist()
+    if nan_cols:
+        print(f"🗑️  Dropping {len(nan_cols)} fully NaN columns")
+        df = df.drop(columns=nan_cols)
+
+    # 3. Fill remaining NaN with forward/backward fill
+    df = df.ffill().bfill().fillna(0)
+
+    # Feature columns (exclude raw OHLCV, keep only numeric indicators)
+    excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+    feature_cols = [
+        col for col in df.columns
+        if col not in excluded_cols
+        and pd.api.types.is_numeric_dtype(df[col])
+    ]
+
+    if not feature_cols:
+        raise ValueError("No numeric features found after cleaning! Check your data.")
 
     print(f"📊 Using {len(feature_cols)} features: {feature_cols[:5]}... (showing first 5)")
 
@@ -302,13 +340,14 @@ def main():
     parser = argparse.ArgumentParser(description='Train LSTM model')
     parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
     parser.add_argument('--timeframe', type=str, default='1h', help='Timeframe (e.g., 1h, 4h)')
+    parser.add_argument('--market', type=str, default='futures', help='Market type (spot or futures)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
     parser.add_argument('--seq-length', type=int, default=60, help='Sequence length (lookback)')
     parser.add_argument('--hidden-size', type=int, default=128, help='LSTM hidden size')
     parser.add_argument('--num-layers', type=int, default=2, help='Number of LSTM layers')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--data-dir', type=str, default='data/historical', help='Data directory')
+    parser.add_argument('--data-dir', type=str, default='data/advanced', help='Data directory')
     parser.add_argument('--output-dir', type=str, default='models/trained', help='Output directory')
 
     args = parser.parse_args()
@@ -332,7 +371,7 @@ def main():
     print()
 
     # 1. Load data
-    df = load_data(args.symbol, args.timeframe, args.data_dir)
+    df = load_data(args.symbol, args.timeframe, args.market, args.data_dir)
 
     # 2. Prepare features
     X, y, scaler, feature_cols = prepare_features(df, args.seq_length)

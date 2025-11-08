@@ -157,20 +157,92 @@ def sync(req: SyncReq):
 
 @router.post("/train")
 def train(req: TrainReq):
+    """
+    Train ML models on historical data.
+
+    Calls appropriate training script based on model_type:
+    - ensemble: train_xgboost.py
+    - lstm: train_lstm.py
+    - ppo: train_ppo.py
+    - transformer: Not implemented yet (returns error)
+
+    Trains one model per symbol+timeframe combination.
+    """
+    # Check for unsupported model types
+    if req.model_type == "transformer":
+        return {
+            "ok": False,
+            "returncode": -1,
+            "args": [],
+            "stdout": "",
+            "stderr": "❌ Transformer model not implemented yet. Use ensemble, lstm, or ppo.",
+        }
+
+    # Map model_type to training script
+    script_map = {
+        "ensemble": "backend.training.train_xgboost",
+        "lstm": "backend.training.train_lstm",
+        "ppo": "backend.training.train_ppo",
+    }
+
+    if req.model_type not in script_map:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "args": [],
+            "stdout": "",
+            "stderr": f"❌ Unknown model type: {req.model_type}. Use ensemble, lstm, or ppo.",
+        }
+
+    script = script_map[req.model_type]
+
+    # Parse timeframes
+    timeframes = [tf.strip() for tf in req.timeframes.split(",") if tf.strip()]
+
+    # Train one model per symbol+timeframe combination
+    # For simplicity, train only the first symbol+timeframe (UI shows one at a time)
+    # To train all combinations, loop here
+
+    symbol = req.symbols[0]  # Take first symbol
+    timeframe = timeframes[0]  # Take first timeframe
+
+    # Build command based on model type
     args = [
-        "python", "-m", "backend.cli",
-        "train",
-        "-s", ",".join(req.symbols),
-        "-t", req.timeframes,
+        "python", "-m", script,
+        "--symbol", symbol,
+        "--timeframe", timeframe,
+        "--market", "futures",  # Default to futures (can be made configurable)
+        "--data-dir", "data/advanced",
+        "--output-dir", "data/models",
     ]
-    # Model type ve epochs parametreleri (CLI destekliyorsa)
-    if hasattr(req, 'model_type') and req.model_type:
-        args.extend(["--model-type", req.model_type])
-    if hasattr(req, 'epochs') and req.epochs:
-        args.extend(["--epochs", str(req.epochs)])
-    if hasattr(req, 'device') and req.device:
-        args.extend(["--device", req.device])
-    return _run(args)
+
+    # Add model-specific parameters
+    if req.model_type == "ensemble":
+        args.extend([
+            "--task", "pattern_classification",
+            "--n-estimators", "1200",
+            "--max-depth", "6",
+            "--lr", "0.05",
+        ])
+    elif req.model_type == "lstm":
+        args.extend([
+            "--epochs", str(req.epochs),
+            "--batch-size", "32",
+            "--seq-length", "60",
+            "--hidden-size", "128",
+            "--num-layers", "2",
+            "--lr", "0.001",
+        ])
+    elif req.model_type == "ppo":
+        args.extend([
+            "--total-timesteps", str(req.epochs * 1000),  # epochs * 1000 = timesteps
+            "--learning-rate", "0.0003",
+            "--batch-size", "64",
+            "--n-steps", "2048",
+        ])
+
+    # Use longer timeout for training (1 hour)
+    return _run(args, timeout=3600)
 
 
 @router.post("/oneshot")

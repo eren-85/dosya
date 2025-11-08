@@ -16,6 +16,13 @@ Features:
 
 import os
 import sys
+import io
+
+# Fix Windows encoding issue (support emojis)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import argparse
 import pandas as pd
 import numpy as np
@@ -304,25 +311,35 @@ def classify_trend(df):
     return np.array(trends[:len(df)])
 
 
-def load_data(symbol, timeframe, data_dir='data/historical'):
+def load_data(symbol, timeframe, market='futures', data_dir='data/advanced'):
     """Load historical data from Parquet"""
 
-    filename = f"{symbol}_{timeframe}_futures.parquet"
-    filepath = Path(data_dir) / filename
+    # Try multiple file patterns in order
+    patterns = [
+        f"{symbol}_{timeframe}_{market}_multi.parquet",      # Multi-file format (try first)
+        f"{symbol}_{timeframe}_{market}_binance.parquet",    # Advanced collector format
+        f"{symbol}_{timeframe}_{market}.parquet",            # Basic format
+    ]
 
-    if not filepath.exists():
-        raise FileNotFoundError(f"Data file not found: {filepath}")
+    for filename in patterns:
+        filepath = Path(data_dir) / filename
+        if filepath.exists():
+            print(f"📂 Loading data from {filepath}")
+            df = pd.read_parquet(filepath)
 
-    print(f"📂 Loading data from {filepath}")
-    df = pd.read_parquet(filepath)
+            # Ensure required columns exist
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            if not all(col in df.columns for col in required_cols):
+                raise ValueError(f"Data must have columns: {required_cols}")
 
-    # Ensure required columns exist
-    required_cols = ['open', 'high', 'low', 'close', 'volume']
-    if not all(col in df.columns for col in required_cols):
-        raise ValueError(f"Data must have columns: {required_cols}")
+            print(f"✅ Loaded {len(df)} candles")
+            return df
 
-    print(f"✅ Loaded {len(df)} candles")
-    return df
+    # If none found, raise error
+    raise FileNotFoundError(
+        f"Data file not found for {symbol}_{timeframe}_{market} in {data_dir}. "
+        f"Tried patterns: {patterns}"
+    )
 
 
 def prepare_features(df, task='pattern_classification'):
@@ -331,11 +348,32 @@ def prepare_features(df, task='pattern_classification'):
     print("🔧 Calculating technical indicators...")
     df = calculate_indicators(df)
 
-    # Feature columns (exclude raw OHLCV)
-    feature_cols = [col for col in df.columns if col not in [
-        'open', 'high', 'low', 'close', 'volume',
-        'open_time', 'close_time', 'timestamp'
-    ]]
+    # Clean data BEFORE feature selection
+    # 1. Drop object columns explicitly
+    object_cols = df.select_dtypes(include=['object']).columns.tolist()
+    if object_cols:
+        print(f"🗑️  Dropping {len(object_cols)} object columns")
+        df = df.drop(columns=object_cols)
+
+    # 2. Drop columns that are 100% NaN
+    nan_cols = df.columns[df.isna().all()].tolist()
+    if nan_cols:
+        print(f"🗑️  Dropping {len(nan_cols)} fully NaN columns")
+        df = df.drop(columns=nan_cols)
+
+    # 3. Fill remaining NaN with forward/backward fill
+    df = df.ffill().bfill().fillna(0)
+
+    # Feature columns (exclude raw OHLCV and non-numeric columns)
+    excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+    feature_cols = [
+        col for col in df.columns
+        if col not in excluded_cols
+        and pd.api.types.is_numeric_dtype(df[col])
+    ]
+
+    if not feature_cols:
+        raise ValueError("No numeric features found after cleaning! Check your data.")
 
     print(f"📊 Using {len(feature_cols)} features")
 
@@ -353,20 +391,54 @@ def prepare_features(df, task='pattern_classification'):
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    # Extract features
-    X = df[feature_cols].values
+    # ROBUST DATA PREPARATION - Fill all NaNs AND inf values (DO NOT drop rows)
+    df = df.ffill().bfill().fillna(0)
+
+    # Replace inf with 0 (critical - prevents data loss!)
+    df = df.replace([np.inf, -np.inf], 0)
+
+    # Extract features (float32 for efficiency)
+    X = df[feature_cols].astype('float32')
+    y = pd.Series(y).astype('int32')
+
+    # Filter only truly invalid samples (should be minimal now)
+    mask = np.isfinite(X.values).all(axis=1) & y.notna().values
+    X, y = X[mask], y[mask]
+
+    print(f"📊 After filtering: {len(y)} valid samples")
+
+    # FALLBACK: If too few samples, use next-bar sign as label
+    if len(y) < 200:
+        print(f"⚠️  Too few samples ({len(y)}), using fallback: next-bar sign label")
+
+        # Recalculate from full dataframe
+        diff = df['close'].shift(-1) - df['close']
+        y_fallback = (diff > 0).astype('int32')
+
+        # Reextract X from full df (after cleaning)
+        X_full = df[feature_cols].astype('float32')
+
+        # Filter with fallback labels
+        mask_fallback = y_fallback.notna().values & np.isfinite(X_full.values).all(axis=1)
+        X = X_full[mask_fallback]
+        y = y_fallback[mask_fallback]
+
+        print(f"   Fallback samples: {len(y)}")
+
+    if len(y) < 10:
+        raise ValueError(f"Insufficient data: only {len(y)} samples after cleaning. Need at least 10.")
 
     # Normalize features
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(X.values)
 
     print(f"✅ Prepared data: X={X_scaled.shape}, y={y.shape}")
 
-    return X_scaled, y, scaler, feature_cols
+    return X_scaled, y.values, scaler, feature_cols
 
 
 def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, learning_rate=0.1):
-    """Train XGBoost model"""
+    """Train XGBoost model (handles empty validation set)"""
 
     print(f"\n🚀 Starting XGBoost training...")
     print(f"   Estimators: {n_estimators}")
@@ -376,7 +448,6 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
 
     # Convert to DMatrix for XGBoost
     dtrain = xgb.DMatrix(X_train, label=y_train)
-    dval = xgb.DMatrix(X_val, label=y_val)
 
     # XGBoost parameters
     params = {
@@ -392,33 +463,45 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
         'tree_method': 'hist',
     }
 
-    # Training with early stopping
-    evals = [(dtrain, 'train'), (dval, 'val')]
+    # Training with or without validation
+    has_validation = len(y_val) > 0
+
+    if has_validation:
+        dval = xgb.DMatrix(X_val, label=y_val)
+        evals = [(dtrain, 'train'), (dval, 'val')]
+        early_stopping_rounds = 50
+    else:
+        evals = [(dtrain, 'train')]
+        early_stopping_rounds = None
 
     model = xgb.train(
         params,
         dtrain,
         num_boost_round=n_estimators,
         evals=evals,
-        early_stopping_rounds=50,
+        early_stopping_rounds=early_stopping_rounds,
         verbose_eval=50
     )
 
     # Evaluate
     train_pred = model.predict(dtrain)
-    val_pred = model.predict(dval)
-
     train_acc = accuracy_score(y_train, train_pred)
-    val_acc = accuracy_score(y_val, val_pred)
+
+    if has_validation:
+        val_pred = model.predict(dval)
+        val_acc = accuracy_score(y_val, val_pred)
+    else:
+        val_acc = 0.0
 
     print("-" * 60)
     print(f"✅ Training complete!")
     print(f"   Train accuracy: {train_acc:.3f}")
-    print(f"   Val accuracy: {val_acc:.3f}")
-
-    # Classification report
-    print("\n📊 Validation Classification Report:")
-    print(classification_report(y_val, val_pred))
+    if has_validation:
+        print(f"   Val accuracy: {val_acc:.3f}")
+        print("\n📊 Validation Classification Report:")
+        print(classification_report(y_val, val_pred))
+    else:
+        print(f"   Val accuracy: N/A (no validation set)")
 
     return model, train_acc, val_acc
 
@@ -427,14 +510,15 @@ def main():
     parser = argparse.ArgumentParser(description='Train XGBoost model')
     parser.add_argument('--symbol', type=str, default='BTCUSDT', help='Trading symbol')
     parser.add_argument('--timeframe', type=str, default='1h', help='Timeframe (e.g., 1h, 4h)')
-    parser.add_argument('--task', type=str, default='pattern_classification',
+    parser.add_argument('--market', type=str, default='futures', help='Market type (spot or futures)')
+    parser.add_argument('--task', type=str, default='trend_classification',
                        choices=['pattern_classification', 'trend_classification'],
-                       help='Classification task')
+                       help='Classification task (trend_classification recommended)')
     parser.add_argument('--n-estimators', type=int, default=500, help='Number of trees')
     parser.add_argument('--max-depth', type=int, default=6, help='Maximum tree depth')
     parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
-    parser.add_argument('--data-dir', type=str, default='data/historical', help='Data directory')
-    parser.add_argument('--output-dir', type=str, default='models/trained', help='Output directory')
+    parser.add_argument('--data-dir', type=str, default='data/advanced', help='Data directory')
+    parser.add_argument('--output-dir', type=str, default='data/models', help='Output directory')
 
     args = parser.parse_args()
 
@@ -455,19 +539,39 @@ def main():
     print()
 
     # 1. Load data
-    df = load_data(args.symbol, args.timeframe, args.data_dir)
+    df = load_data(args.symbol, args.timeframe, args.market, args.data_dir)
 
     # 2. Prepare features
     X, y, scaler, feature_cols = prepare_features(df, args.task)
 
-    # 3. Train/val split
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, shuffle=False  # Don't shuffle time series!
-    )
+    # 3. Train/val split with dynamic test_size
+    n_samples = len(y)
 
-    print(f"\n📊 Data split:")
-    print(f"   Train: {len(X_train)} samples")
-    print(f"   Val: {len(X_val)} samples")
+    # Adjust test_size based on sample count
+    if n_samples >= 1000:
+        test_size = 0.2
+    elif n_samples >= 200:
+        test_size = 0.1
+    elif n_samples >= 40:
+        test_size = 0.05
+    elif n_samples >= 8:
+        test_size = 0.25
+    else:
+        test_size = 0  # Skip validation for very small datasets
+
+    print(f"\n📊 Data split (n={n_samples}, test_size={test_size}):")
+
+    if test_size == 0:
+        # No validation set - use all data for training
+        X_train, y_train = X, y
+        X_val, y_val = X[:0], y[:0]  # Empty validation set
+        print(f"   Train: {len(X_train)} samples (no validation)")
+    else:
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, test_size=test_size, shuffle=False  # Don't shuffle time series!
+        )
+        print(f"   Train: {len(X_train)} samples")
+        print(f"   Val: {len(X_val)} samples")
 
     # 4. Train model
     model, train_acc, val_acc = train_model(
@@ -489,7 +593,8 @@ def main():
 
     # 6. Save model and metadata
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_name = f"xgboost_{args.task}_{args.symbol}_{args.timeframe}_{timestamp}"
+    # Format: BTCUSDT_1h_futures_xgb_20251108_125637 (compatible with hybrid PPO wildcard)
+    model_name = f"{args.symbol}_{args.timeframe}_{args.market}_xgb_{timestamp}"
 
     model_path = output_dir / f"{model_name}.json"
     scaler_path = output_dir / f"{model_name}_scaler.pkl"

@@ -1,0 +1,20 @@
+# ============================================================================
+# DEPRECATED: This file is merged into requirements.txt
+# ============================================================================
+#
+# Vision stack requirements are now integrated into the main requirements.txt
+# with environment markers for Windows/Linux compatibility.
+#
+# For installation instructions, see: INSTALL_VISION.md
+#
+# Key changes:
+# - NumPy 2.x ecosystem maintained (2.2.6)
+# - Windows incompatible packages marked with: ; sys_platform != 'win32'
+# - All vision packages (ultralytics, opencv, layoutparser) included
+# - Single unified requirements file for easier maintenance
+#
+# ============================================================================
+
+# Please use: pip install -r requirements.txt
+#
+# This file is kept for reference only.
