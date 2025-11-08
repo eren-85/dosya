@@ -29,7 +29,7 @@ def main():
 
     if report_text['status'] == 'success':
         print("\n" + report_text['text_report'])
-        print(f"\n✅ Text format başarılı! Marketteki Hacim Payı: %{report_text['market_share']:.1f}")
+        print(f"\n✅ Text format başarılı! Top 10 Dominance: %{report_text['top_10_dominance']:.1f}")
     else:
         print(f"❌ Hata: {report_text.get('message')}")
 
@@ -44,7 +44,7 @@ def main():
 
     if report_table['status'] == 'success':
         print("\n" + report_table['text_report'])
-        print(f"\n✅ Table format başarılı! Marketteki Hacim Payı: %{report_table['market_share']:.1f}")
+        print(f"\n✅ Table format başarılı! Top 10 Dominance: %{report_table['top_10_dominance']:.1f}")
     else:
         print(f"❌ Hata: {report_table.get('message')}")
 
@@ -66,7 +66,7 @@ def main():
             f.write(report_html['text_report'])
 
         print(f"✅ HTML raporu oluşturuldu: {filename}")
-        print(f"   Marketteki Hacim Payı: %{report_html['market_share']:.1f}")
+        print(f"   Top 10 Dominance: %{report_html['top_10_dominance']:.1f}")
         print(f"\n💡 Browser'da açmak için:")
         print(f"   - Windows: start {filename}")
         print(f"   - Mac: open {filename}")

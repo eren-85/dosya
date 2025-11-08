@@ -77,7 +77,7 @@ def main():
         print("✅ Rapor olusturuldu!")
         print(f"   Dosya: {filename}")
         print(f"   Risk: {report['risk_assessment']['level'].upper()}")
-        print(f"   Market Hacim Payi: %{report['market_share']:.1f}")
+        print(f"   Top 10 Dominance: %{report['top_10_dominance']:.1f}")
         print(f"   Toplam Coin: {report['total_coins']}")
         print(f"   Zaman: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print()
