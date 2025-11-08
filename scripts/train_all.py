@@ -38,15 +38,15 @@ CONFIGS = {
         "lstm": 20,
     },
 
-    # Device
-    "device": "cpu",  # Use CPU for compatibility
+    # Device (auto-detect GPU)
+    "device": "auto",  # auto, cuda, or cpu
 
     # Separate models
     "separate_by_market": True,
     "separate_by_timeframe": True,
 
     # Filters
-    "timeframes": ["1d"],  # Only 1d for now
+    "timeframes": None,  # None = all timeframes (1h, 4h, 1d, etc.)
     "markets": None,  # All markets
 
     # Output
@@ -222,6 +222,20 @@ def main():
     print("\n" + "="*80)
     print("MULTI-EVERYTHING MODEL TRAINER")
     print("="*80)
+
+    # Auto-detect GPU
+    if CONFIGS['device'] == 'auto':
+        try:
+            import torch
+            if torch.cuda.is_available():
+                CONFIGS['device'] = 'cuda'
+                print(f"\n[OK] GPU detected: {torch.cuda.get_device_name(0)}")
+            else:
+                CONFIGS['device'] = 'cpu'
+                print(f"\n[*] No GPU detected, using CPU")
+        except ImportError:
+            CONFIGS['device'] = 'cpu'
+            print(f"\n[*] PyTorch not installed, using CPU")
 
     # Find data files
     print(f"\n[*] Scanning {CONFIGS['data_dir']} for parquet files...")

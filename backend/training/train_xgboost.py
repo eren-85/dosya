@@ -372,11 +372,11 @@ def prepare_features(df, task='pattern_classification'):
         'open_time', 'close_time', 'timestamp'
     ]]
 
-    print(f"📊 Using {len(feature_cols)} features")
+    print(f"[*] Using {len(feature_cols)} features")
 
     # Create target based on task
     if task == 'pattern_classification':
-        print("🔍 Detecting patterns...")
+        print("[*] Detecting patterns...")
         y = detect_patterns(df)
         print(f"   Found {len(set(y))} pattern types: {set(y)}")
 
@@ -504,7 +504,7 @@ def train_model(X_train, y_train, X_val, y_val, n_estimators=500, max_depth=6, l
         print(f"   Val accuracy: {val_acc:.3f}")
 
         # Classification report
-        print("\n📊 Validation Classification Report:")
+        print("\n[*] Validation Classification Report:")
         print(classification_report(y_val, val_pred))
     else:
         val_acc = float('nan')
@@ -526,6 +526,7 @@ def main():
     parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--data-dir', type=str, default='data/historical', help='Data directory')
     parser.add_argument('--output-dir', type=str, default='models/trained', help='Output directory')
+    parser.add_argument('--days', type=int, default=None, help='Number of days of recent data to use (default: all data)')
 
     args = parser.parse_args()
 
@@ -534,7 +535,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("🤖 XGBOOST MODEL - TRAINING SCRIPT")
+    print("XGBOOST MODEL - TRAINING SCRIPT")
     print("=" * 60)
     print(f"Symbol: {args.symbol}")
     print(f"Timeframe: {args.timeframe}")
@@ -548,6 +549,13 @@ def main():
     # 1. Load data
     df = load_data(args.symbol, args.timeframe, args.data_dir)
 
+    # Filter by days if specified
+    if args.days is not None:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        cutoff_date = df['timestamp'].max() - pd.Timedelta(days=args.days)
+        df = df[df['timestamp'] >= cutoff_date].copy()
+        print(f"\n[*] Using last {args.days} days of data: {len(df)} rows")
+
     # 2. Prepare features
     X, y, scaler, feature_cols = prepare_features(df, args.task)
 
@@ -556,7 +564,7 @@ def main():
         X, y, test_size=0.2, shuffle=False  # Don't shuffle time series!
     )
 
-    print(f"\n📊 Data split:")
+    print(f"\n[*] Data split:")
     print(f"   Train: {len(X_train)} samples")
     print(f"   Val: {len(X_val)} samples")
 
@@ -569,7 +577,7 @@ def main():
     )
 
     # 5. Feature importance
-    print("\n🔍 Top 10 Most Important Features:")
+    print("\n[*] Top 10 Most Important Features:")
     importance = model.get_score(importance_type='gain')
     importance_sorted = sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10]
 
@@ -612,7 +620,7 @@ def main():
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    print(f"\n💾 Model saved:")
+    print(f"\n[*] Model saved:")
     print(f"   Model: {model_path}")
     print(f"   Scaler: {scaler_path}")
     print(f"   Metadata: {metadata_path}")
