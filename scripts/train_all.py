@@ -301,6 +301,8 @@ def train_model(model_type: str, data_files: List[str], output_name: str,
             cmd,
             capture_output=True,
             text=True,
+            encoding='utf-8',  # Force UTF-8 encoding for subprocess output
+            errors='replace',  # Replace undecodable bytes instead of crashing
             timeout=7200  # 2 hour timeout
         )
 

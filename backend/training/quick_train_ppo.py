@@ -62,15 +62,22 @@ def main():
     print(f"📊 Using {len(data_files)} data file(s)")
     print(f"📁 Output: {args.output_name}")
 
-    # Build command for actual training script
+    # Build command for actual training script (use basic train_ppo.py, not multimodal)
     total_timesteps = hyperparams.get('total_timesteps', 5_000_000)
+    learning_rate = hyperparams.get('learning_rate', 3e-4)
+    batch_size = hyperparams.get('batch_size', 256)
+    n_steps = hyperparams.get('n_steps', 4096)
 
     cmd = [
-        'python', '-m', 'backend.training.train_multimodal_ppo',
+        'python', '-m', 'backend.training.train_ppo',
         '--symbol', symbol,
         '--timeframe', timeframe,
         '--market', market,
         '--total-timesteps', str(total_timesteps),
+        '--learning-rate', str(learning_rate),
+        '--batch-size', str(batch_size),
+        '--n-steps', str(n_steps),
+        '--data-dir', 'data/advanced',
         '--output-dir', 'data/models',
     ]
 
