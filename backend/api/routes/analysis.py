@@ -6,6 +6,7 @@ Features:
 - Technical indicator calculation
 - OpenAI-powered insights
 - Multiple symbols and timeframes
+- Market cash flow analysis
 """
 
 from fastapi import APIRouter, HTTPException
@@ -20,6 +21,13 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+# Market Cash Flow Analyzer
+try:
+    from backend.analysis.market_cash_flow import MarketCashFlowAnalyzer
+    CASH_FLOW_AVAILABLE = True
+except ImportError:
+    CASH_FLOW_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +51,14 @@ class QuickAnalysisRequest(BaseModel):
     """Quick analysis request"""
     symbol: str = Field(..., examples=["BTCUSDT"])
     question: Optional[str] = Field(None, examples=["Is this a good entry point?"])
+
+
+class CashFlowRequest(BaseModel):
+    """Market cash flow analysis request"""
+    symbols: Optional[List[str]] = Field(None, description="List of symbols (None = all available)")
+    timeframe: str = Field("15min", description="Base timeframe for analysis")
+    limit: int = Field(500, ge=100, le=2000, description="Number of candles to analyze")
+    format: str = Field("json", pattern="^(json|text)$", description="Output format")
 
 
 class AnalysisResponse(BaseModel):
@@ -152,6 +168,71 @@ async def analyze(req: AnalyzeRequest):
         "results": results,
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+@router.post("/analysis/cash-flow")
+async def cash_flow_analysis(req: CashFlowRequest):
+    """
+    Market-wide cash flow analysis
+
+    Analyzes:
+    - Buyer vs seller percentages across timeframes (15m, 1h, 4h, 12h, 1d)
+    - Cash distribution by coin
+    - Momentum scores
+    - Risk assessment
+
+    Returns:
+    - JSON format: Complete structured data
+    - Text format: Human-readable report (for Telegram/Discord bots)
+
+    Example usage:
+    ```
+    POST /api/analysis/cash-flow
+    {
+        "symbols": null,  # All available symbols
+        "timeframe": "15min",
+        "limit": 500,
+        "format": "text"
+    }
+    ```
+    """
+    logger.info(f"💰 Cash flow analysis request (format={req.format})")
+
+    if not CASH_FLOW_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Market cash flow analyzer not available"
+        )
+
+    try:
+        analyzer = MarketCashFlowAnalyzer(data_dir="data")
+
+        report = analyzer.analyze_market(
+            symbols=req.symbols,
+            base_timeframe=req.timeframe,
+            limit=req.limit
+        )
+
+        if report.get('status') == 'error':
+            raise HTTPException(status_code=500, detail=report.get('message'))
+
+        # Return text format for bots
+        if req.format == 'text':
+            return {
+                "status": "success",
+                "format": "text",
+                "report": report['text_report'],
+                "timestamp": report['timestamp']
+            }
+
+        # Return full JSON
+        return report
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Cash flow analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/analysis/quick")
