@@ -118,6 +118,69 @@ Browser'da açılabilir, modern, interaktif rapor:
 
 ---
 
+## 📈 Metrik Açıklamaları
+
+### **Kısa Vadeli Alım Gücü (Short-Term Power)**
+**Formül:** `15m alım % / 1d alım %`
+
+**Örnek:**
+- 15m alım: %43.6
+- 1d alım: %40.0
+- Sonuç: 43.6 / 40.0 = **1.09X**
+
+**Anlamı:**
+- **1.0X** = Normal (15m ve 1d alım gücü eşit)
+- **>1.0X** = Kısa vadede alım momentumu artıyor 🔼
+- **<1.0X** = Kısa vadede alım momentumu düşüyor 🔻
+
+### **Marketteki Hacim Payı (Market Share)**
+**Formül:** `(Top 30 coin volume / Tüm analiz edilen coin volume) * 100`
+
+**Örnek:**
+- Top 30 coin'in 24h volume'ü: $120B
+- Tüm 30 coin'in 24h volume'ü: $120B
+- Sonuç: (120/120) * 100 = **%100**
+
+**Anlamı:**
+Analiz edilen top 30 coin'in, tüm analiz edilen coin'ler içindeki hacim payı. Genellikle %90-100 arası olur (çünkü top coin'ler çoğu hacmi kapsıyor).
+
+### **Nakit Payı (Cash Share)**
+**Formül:** `(Coin volume / Toplam market volume) * 100`
+
+**Örnek:**
+- BTC'nin 24h volume'ü: $50B
+- Toplam market volume: $150B
+- BTC nakit payı: (50/150) * 100 = **%33.3**
+
+**Anlamı:**
+Bir coin'in, toplam market hacmindeki payı. BTC %35.2 ise, toplam paranın %35.2'si BTC'de işlem görüyor demek.
+
+### **MTS (Momentum Score)**
+**Formül:** `15m alım % / Ortalama alım %`
+
+**Örnek:**
+- 15m alım: %54
+- Ortalama alım (5 timeframe ortalaması): %49
+- MTS: 54 / 49 = **1.1X**
+
+**Anlamı:**
+- **1.0X** = Normal momentum
+- **>1.0X** = Güçlü alım momentumu (örn: 1.5X = %50 daha güçlü)
+- **<1.0X** = Zayıf alım momentumu
+
+### **Timeframe İndikatörleri (🔼/🔻)**
+- **🔼** = Alım baskınlığı (buyer % ≥ %50)
+- **🔻** = Satış baskınlığı (buyer % < %50)
+
+**Örnek:** `🔼🔻🔼🔻🔼`
+- 15m: 🔼 Alım dominant
+- 1h: 🔻 Satış dominant
+- 4h: 🔼 Alım dominant
+- 12h: 🔻 Satış dominant
+- 1d: 🔼 Alım dominant
+
+---
+
 ## 🪟 Windows Bat Dosyaları
 
 ### `start_bot.bat`

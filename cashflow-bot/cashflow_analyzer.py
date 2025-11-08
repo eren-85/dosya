@@ -228,12 +228,12 @@ class CashFlowAnalyzer:
     ) -> Dict[str, Any]:
         """Rapor oluştur"""
         buyer_1d = metrics['timeframes'].get('1d', {}).get('buyer_percentage', 0)
-        total_volume = sum(metrics['timeframes'].get(tf, {}).get('total_volume', 0)
-                          for tf in ['15m', '1h', '4h', '12h', '1d']) / 5  # Average
 
         # Calculate market share (top 30 coins' share in total market)
+        # Use total volume of all analyzed coins (24h period, same as flows)
+        total_market_volume = sum(f['total_volume'] for f in flows)
         top_30_volume = sum(f['total_volume'] for f in flows[:30])
-        market_share = (top_30_volume / total_volume * 100) if total_volume > 0 else 0
+        market_share = (top_30_volume / total_market_volume * 100) if total_market_volume > 0 else 0
 
         # Risk
         if buyer_1d >= 50:
