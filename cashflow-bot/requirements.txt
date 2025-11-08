@@ -1,0 +1,16 @@
+# Market Cash Flow Bot - Minimal Dependencies
+
+# Core
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Telegram Bot
+python-telegram-bot>=20.0
+
+# API (opsiyonel)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Discord Bot (opsiyonel)
+# discord.py>=2.3.0
