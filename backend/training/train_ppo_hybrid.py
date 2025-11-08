@@ -416,9 +416,23 @@ class HybridTrainingCallback(BaseCallback):
 
 
 def load_ensemble_model(model_path: str) -> Tuple[xgb.Booster, list]:
-    """Load pre-trained Ensemble (XGBoost) model"""
+    """Load pre-trained Ensemble (XGBoost) model - supports wildcards"""
     print(f"📥 Loading Ensemble model: {model_path}")
 
+    # Check if path contains wildcards
+    if '*' in model_path or '?' in model_path:
+        # Use glob to find matching files
+        import glob
+        matching_files = glob.glob(model_path)
+
+        if not matching_files:
+            raise FileNotFoundError(f"No Ensemble models found matching pattern: {model_path}")
+
+        # Use the most recent file
+        model_path = max(matching_files, key=lambda p: Path(p).stat().st_mtime)
+        print(f"   📂 Found: {model_path}")
+
+    # Check if file exists
     if not Path(model_path).exists():
         raise FileNotFoundError(f"Ensemble model not found: {model_path}")
 

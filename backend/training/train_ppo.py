@@ -65,7 +65,7 @@ class TradingEnvironment(gym.Env):
         - PnL-based with risk penalties
     """
 
-    def __init__(self, df: pd.DataFrame, initial_capital: float = 10000.0, commission: float = 0.001):
+    def __init__(self, df: pd.DataFrame, initial_capital: float = 10000.0, commission: float = 0.001, feature_cols: list = None):
         super().__init__()
 
         self.df = df.reset_index(drop=True)
@@ -87,13 +87,18 @@ class TradingEnvironment(gym.Env):
         # Calculate indicators AFTER cleaning
         self._calculate_indicators()
 
-        # Feature columns - only numeric columns
-        excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
-        self.feature_cols = [
-            col for col in self.df.columns
-            if col not in excluded_cols
-            and pd.api.types.is_numeric_dtype(self.df[col])
-        ]
+        # Feature columns - use provided list or auto-detect
+        if feature_cols is not None:
+            # Use provided feature list (for validation consistency)
+            self.feature_cols = feature_cols
+        else:
+            # Auto-detect numeric columns
+            excluded_cols = ['open', 'high', 'low', 'close', 'volume', 'open_time', 'close_time', 'timestamp', 'target']
+            self.feature_cols = [
+                col for col in self.df.columns
+                if col not in excluded_cols
+                and pd.api.types.is_numeric_dtype(self.df[col])
+            ]
 
         if not self.feature_cols:
             raise ValueError("No numeric features found after cleaning! Check your data.")
@@ -468,16 +473,21 @@ def main():
 
     # 3. Create environment
     print("\n🏗️  Creating trading environment...")
-    env = TradingEnvironment(
+    train_env = TradingEnvironment(
         df=train_df,
         initial_capital=args.initial_capital,
         commission=args.commission
     )
-    env = DummyVecEnv([lambda: env])
+
+    # Save feature list for validation consistency
+    train_feature_cols = train_env.feature_cols.copy()
+
+    env = DummyVecEnv([lambda: train_env])
 
     print(f"✅ Environment created")
     print(f"   Observation space: {env.observation_space}")
     print(f"   Action space: {env.action_space}")
+    print(f"   Features: {len(train_feature_cols)}")
 
     # 4. Create PPO agent
     print("\n🤖 Creating PPO agent...")
@@ -514,7 +524,8 @@ def main():
     val_env = TradingEnvironment(
         df=val_df,
         initial_capital=args.initial_capital,
-        commission=args.commission
+        commission=args.commission,
+        feature_cols=train_feature_cols  # Use same features as training
     )
 
     obs, _ = val_env.reset()
