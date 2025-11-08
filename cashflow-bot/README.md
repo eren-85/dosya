@@ -21,14 +21,33 @@
 
 ## 🚀 Hızlı Başlangıç
 
-### 1. Kurulum
+### 🪟 Windows (Tek Tıkla!)
+
+**Telegram Bot İçin:**
+1. `config.py` dosyasını düzenle, bot token ekle
+2. `start_bot.bat` dosyasına çift tıkla
+3. Telegram'dan `/start` yaz!
+
+**HTML Rapor İçin:**
+1. `generate_report.bat` dosyasına çift tıkla
+2. 30-45 saniye bekle
+3. Browser'da `cf.html` otomatik açılır!
+4. Coin üzerine gel → USD hacim görürsün
+
+**Hızlı Özet İçin:**
+1. `quick_report.bat` dosyasına çift tıkla
+2. 10 saniye bekle, tablo formatında 10 coin
+
+### 🐧 Linux/Mac (Manuel)
+
+#### 1. Kurulum
 
 ```bash
 # Gerekli paketleri yükle
 pip install -r requirements.txt
 ```
 
-### 2. Telegram Bot Ayarla
+#### 2. Telegram Bot Ayarla
 
 ```bash
 # config.py dosyasını düzenle
@@ -38,7 +57,7 @@ nano config.py
 TELEGRAM_BOT_TOKEN = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 ```
 
-### 3. Botu Başlat
+#### 3. Botu Başlat
 
 ```bash
 # Telegram bot
@@ -46,6 +65,9 @@ python telegram_bot.py
 
 # veya API server (opsiyonel)
 python api.py
+
+# veya HTML rapor oluştur
+python generate_report.py
 ```
 
 ---
@@ -93,6 +115,68 @@ Browser'da açılabilir, modern, interaktif rapor:
 - 🎯 Risk seviyesi renk kodlu
 
 **Kullanım:** `/html` komutu ile HTML dosyası indirilir, browser'da açılır.
+
+---
+
+## 🪟 Windows Bat Dosyaları
+
+### `start_bot.bat`
+Telegram botunu başlatır (tek tıkla).
+
+**Ne yapar?**
+- Python ve bağımlılıkları kontrol eder
+- `config.py`'de bot token var mı kontrol eder
+- Eksik paketleri otomatik yükler
+- Telegram botunu başlatır
+
+**Kullanım:**
+1. Çift tıkla
+2. Telegram'da `/start` yaz
+
+### `generate_report.bat`
+HTML raporu oluşturur ve browser'da açar.
+
+**Ne yapar?**
+- 30 coin için canlı Binance verisi çeker
+- `cf.html` dosyasına kaydeder
+- Browser'da otomatik açar
+- **Her çalıştırdığında aynı dosyayı günceller!**
+
+**Kullanım:**
+1. Çift tıkla
+2. 30-45 saniye bekle
+3. Browser'da `cf.html` açılır
+4. Coin üzerine gel → USD hacim + momentum görürsün
+
+**💡 İpucu:**
+- `cf.html`'i browser'da bookmark yap
+- Her gün `generate_report.bat` çalıştır
+- Browser'da F5 bas, yeni veri gör!
+
+### `quick_report.bat`
+Hızlı özet (10 coin, tablo format).
+
+**Ne yapar?**
+- 10 coin için analiz (daha hızlı)
+- `cf_table.txt` dosyasına tablo formatında kaydeder
+- Konsola da yazdırır
+
+**Kullanım:**
+1. Çift tıkla
+2. 10-15 saniye bekle
+3. Tablo formatında özet görürsün
+
+### `setup.bat`
+İlk kurulum için.
+
+**Ne yapar?**
+- Python versiyonunu kontrol eder
+- `requirements.txt`'den tüm bağımlılıkları yükler
+- Kurulum sonrası yönlendirme
+
+**Kullanım:**
+1. İlk defa kuruyorsan bunu çift tıkla
+2. Sonra `start_bot.bat` veya `generate_report.bat` kullan
 
 ---
 
