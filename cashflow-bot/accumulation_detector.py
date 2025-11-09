@@ -166,6 +166,11 @@ class AccumulationDetector:
         if not ticker:
             return None
 
+        # 30 günlük klines (FİYAT BAĞLAMI için - ÇOK ÖNEMLİ!)
+        klines_30d = self._get_klines(symbol, '1d', 30)
+        if not klines_30d or len(klines_30d) < 30:
+            return None
+
         # 7 günlük klines (volume ortalaması için)
         klines_7d = self._get_klines(symbol, '1d', 7)
         if not klines_7d or len(klines_7d) < 7:
@@ -178,6 +183,19 @@ class AccumulationDetector:
 
         # === METRİK HESAPLAMA ===
 
+        # 0. FİYAT BAĞLAMI (30 günlük değişim) - DISTRIBUTION FİLTRESİ!
+        price_30d_ago = float(klines_30d[0][4])  # 30 gün önce close
+        current_price = float(klines_30d[-1][4])  # şu anki close
+        price_change_30d = ((current_price / price_30d_ago) - 1) * 100
+
+        # 30 gün içinde max/min fiyat
+        prices_30d = [float(k[2]) for k in klines_30d]  # high prices
+        max_price_30d = max(prices_30d)
+        min_price_30d = min([float(k[3]) for k in klines_30d])  # low prices
+
+        # Mevcut fiyatın 30 günlük range'deki pozisyonu (0-100%)
+        price_position = ((current_price - min_price_30d) / (max_price_30d - min_price_30d) * 100) if (max_price_30d - min_price_30d) > 0 else 50
+
         # 1. Hacim artışı (son 24h vs 7 gün ortalaması)
         volume_24h = float(ticker['quoteVolume'])
         volumes_7d = [float(k[5]) for k in klines_7d]  # quote volume
@@ -188,48 +206,71 @@ class AccumulationDetector:
         price_change = float(ticker['priceChangePercent'])
 
         # 3. Alım baskısı (taker buy / total volume)
-        taker_buy_volume = float(ticker['quoteVolume']) * (float(ticker['volume']) / (float(ticker['volume']) + 1))  # Yaklaşık
-        # Daha doğru hesap için son 24h klines'dan
         buy_volumes = [float(k[9]) for k in klines_1d]  # taker buy quote volume
         total_volumes = [float(k[7]) for k in klines_1d]  # quote volume
         buy_pressure = (sum(buy_volumes) / sum(total_volumes) * 100) if sum(total_volumes) > 0 else 0
 
         # 4. Trade count artışı
         trade_count_24h = float(ticker['count'])
-        # 7 günlük ortalama trade count (1d klines'dan tahmin)
         avg_trade_count_7d = np.mean([float(k[8]) for k in klines_7d])  # number of trades
         trade_count_increase = ((trade_count_24h / avg_trade_count_7d) - 1) * 100 if avg_trade_count_7d > 0 else 0
 
         # 5. OBV (On-Balance Volume) trendi
         obv_trend = self._calculate_obv_trend(klines_1d)
 
+        # === DISTRIBUTION FİLTRESİ (ÇOK ÖNEMLİ!) ===
+
+        # Eğer coin son 30 günde %30+ artmışsa ve şimdi tepede ise (>70%)
+        # Bu DISTRIBUTION (satış), ACCUMULATION değil!
+        if price_change_30d > 30 and price_position > 70:
+            # Bu whale satışı - SKIP!
+            return None
+
+        # Eğer coin son 30 günde %50+ artmışsa, kesinlikle distribution
+        if price_change_30d > 50:
+            return None
+
         # === AKÜMüLASYON KRİTERLERİ ===
 
         criteria_met = []
         score = 0
 
+        # Kriter 0: Fiyat bağlamı (YENİ - EN ÖNEMLİ!)
+        # İdeal akümülasyon: Fiyat dip/orta bölgede (%20-50 arası)
+        if 20 <= price_position <= 50:
+            criteria_met.append(f"DipPos{price_position:.0f}%")
+            score += 30  # ÇOK ÖNEMLLİ!
+        elif price_position < 30:
+            criteria_met.append(f"Dip{price_position:.0f}%")
+            score += 40  # DİPTE - SÜPER GÜÇLÜ!
+
+        # Son 30 günde sideways veya düşüş (<%20 değişim) - iyi sinyal
+        if abs(price_change_30d) < 20:
+            criteria_met.append(f"30dSide{price_change_30d:+.0f}%")
+            score += 15
+
         # Kriter 1: Hacim artışı
         if volume_increase >= vol_threshold:
             criteria_met.append(f"Vol↑{volume_increase:.1f}%")
-            score += 30
+            score += 20  # Azalttık çünkü tek başına yeterli değil
 
-        # Kriter 2: Fiyat yatay/düşüyor
+        # Kriter 2: Fiyat yatay/düşüyor (24h)
         if abs(price_change) <= price_threshold:
             criteria_met.append(f"Price{price_change:+.1f}%")
-            score += 25
-        elif price_change < 0:  # Düşüyorsa daha iyi sinyal
+            score += 15
+        elif price_change < 0:  # Düşüyorsa
             criteria_met.append(f"Price{price_change:+.1f}%↓")
-            score += 35
+            score += 20
 
         # Kriter 3: Gizli alım baskısı
         if buy_min <= buy_pressure <= buy_max:
             criteria_met.append(f"Buy{buy_pressure:.1f}%")
-            score += 25
+            score += 20
 
         # Kriter 4: Trade count artışı
         if trade_count_increase >= trade_threshold:
             criteria_met.append(f"Trades↑{trade_count_increase:.1f}%")
-            score += 15
+            score += 10
 
         # Kriter 5: OBV trendi
         if obv_trend > 0:
@@ -238,19 +279,24 @@ class AccumulationDetector:
 
         # === SİNYAL DEĞERLENDİRME ===
 
-        # En az 3 kriter karşılanmalı ve skor 50+
-        if len(criteria_met) >= 3 and score >= 50:
+        # MUTLAKA fiyat bağlamı kriteri olmalı + en az 3 kriter daha
+        has_price_context = any('Dip' in c or '30dSide' in c for c in criteria_met)
+
+        if has_price_context and len(criteria_met) >= 3 and score >= 60:
             return {
                 'symbol': symbol.replace('USDT', ''),
                 'accumulation_score': score,
                 'volume_increase': volume_increase,
                 'price_change': price_change,
+                'price_change_30d': price_change_30d,  # YENİ
+                'price_position': price_position,       # YENİ
                 'buy_pressure': buy_pressure,
                 'trade_count_increase': trade_count_increase,
                 'obv_trend': 'UP' if obv_trend > 0 else 'DOWN',
                 'volume_24h': volume_24h,
                 'criteria_met': criteria_met,
-                'criteria_count': len(criteria_met)
+                'criteria_count': len(criteria_met),
+                'signal_type': 'ACCUMULATION'  # Artık emin olabiliriz!
             }
 
         return None
@@ -361,6 +407,8 @@ class AccumulationDetector:
                 score = signal['accumulation_score']
                 vol_inc = signal['volume_increase']
                 price_ch = signal['price_change']
+                price_ch_30d = signal.get('price_change_30d', 0)  # YENİ
+                price_pos = signal.get('price_position', 50)      # YENİ
                 buy_p = signal['buy_pressure']
                 trade_inc = signal['trade_count_increase']
                 vol_24h = signal['volume_24h']
@@ -369,8 +417,9 @@ class AccumulationDetector:
                 lines.append(f"\n{i}. {coin}")
                 lines.append(f"   Skor: {score:.1f}/100 ⭐")
                 lines.append(f"   Hacim 24h: ${vol_24h:,.0f}")
+                lines.append(f"   Fiyat 30d: {price_ch_30d:+.1f}% | Pozisyon: {price_pos:.0f}% {'🟢DİP' if price_pos < 30 else '🟡ORTA' if price_pos < 60 else '🔴TEPE'}")
                 lines.append(f"   Hacim Artışı: {vol_inc:+.1f}% {'🔥' if vol_inc > 100 else '📈'}")
-                lines.append(f"   Fiyat Değişimi: {price_ch:+.1f}% {'✅' if abs(price_ch) < 3 else '📊'}")
+                lines.append(f"   Fiyat 24h: {price_ch:+.1f}% {'✅' if abs(price_ch) < 3 else '📊'}")
                 lines.append(f"   Alım Baskısı: {buy_p:.1f}% {'🟢' if 52 <= buy_p <= 58 else '🟡'}")
                 lines.append(f"   Trade Count: {trade_inc:+.1f}% {'🔥' if trade_inc > 50 else '📈'}")
                 lines.append(f"   OBV Trend: {signal['obv_trend']}")

@@ -570,6 +570,10 @@ HTML_TEMPLATE = """
 
                         data.accumulation_signals.forEach(signal => {
                             const highScore = signal.accumulation_score >= 70;
+                            const pricePos = signal.price_position || 50;
+                            const priceChange30d = signal.price_change_30d || 0;
+                            const positionLabel = pricePos < 30 ? '🟢DİP' : pricePos < 60 ? '🟡ORTA' : '🔴TEPE';
+
                             accHtml += `
                                 <div class="accumulation-card ${highScore ? 'high-score' : ''}">
                                     <h3>${signal.symbol}</h3>
@@ -584,7 +588,15 @@ HTML_TEMPLATE = """
                                             <span>${signal.volume_increase > 0 ? '+' : ''}${signal.volume_increase.toFixed(1)}% ${signal.volume_increase > 100 ? '🔥' : '📈'}</span>
                                         </div>
                                         <div class="metric">
-                                            <strong>Fiyat:</strong>
+                                            <strong>Fiyat 30d:</strong>
+                                            <span>${priceChange30d > 0 ? '+' : ''}${priceChange30d.toFixed(1)}%</span>
+                                        </div>
+                                        <div class="metric">
+                                            <strong>Pozisyon:</strong>
+                                            <span>${pricePos.toFixed(0)}% ${positionLabel}</span>
+                                        </div>
+                                        <div class="metric">
+                                            <strong>Fiyat 24h:</strong>
                                             <span>${signal.price_change > 0 ? '+' : ''}${signal.price_change.toFixed(2)}% ${Math.abs(signal.price_change) < 3 ? '✅' : '📊'}</span>
                                         </div>
                                         <div class="metric">
