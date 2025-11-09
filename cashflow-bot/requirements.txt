@@ -8,6 +8,9 @@ requests>=2.31.0
 # Telegram Bot
 python-telegram-bot>=20.0
 
+# Web UI
+flask>=3.0.0
+
 # API (opsiyonel)
 fastapi>=0.104.0
 uvicorn>=0.24.0

@@ -4,21 +4,24 @@
 
 ## ✨ Özellikler
 
+- ✅ **İnteraktif Web UI** (browser'da çalışır, tek tıkla başlat!) ⭐ YENİ
 - ✅ **Canlı Binance Spot verisi** (API key gerektirmez)
 - ✅ **USD bazlı hesaplama** (doğru karşılaştırma)
 - ✅ **Dinamik TÜM coin tarama** (statik top 30 değil!)
 - ✅ **Nakit akışına göre sıralama** (volume'e göre değil)
-- ✅ **3 farklı format**: Text, Tablo, HTML (interaktif)
+- ✅ **Otomatik yenileme** (1-30 dakika arası ayarlanabilir) ⭐ YENİ
+- ✅ **4 farklı format**: Web UI, Text, Tablo, HTML
 - ✅ **Telegram bot** komutları
 - ✅ **REST API** (opsiyonel)
 - ✅ **Risk değerlendirmesi** (Low/Medium/High)
-- ✅ **Top N coin** otomatik seçimi
+- ✅ **Top N coin** otomatik seçimi (10/20/30/50)
 - ✅ **5 zaman dilimi** analizi (15m, 1h, 4h, 12h, 1d)
 - ✅ **Emoji göstergeleri** (🔼🔻)
 - ✅ **Top 10 Dominance** metriği
 - ✅ **Momentum Score (MTS)** hesaplama
 - ✅ **HTML tooltips** (USD hacim, momentum detayları)
 - ✅ **Minimum volume filtresi** ($100K default)
+- ✅ **Windows batch files** (tek tıkla başlat)
 
 ---
 
@@ -30,6 +33,13 @@
 1. `config.py` dosyasını düzenle, bot token ekle
 2. `start_bot.bat` dosyasına çift tıkla
 3. Telegram'dan `/start` yaz!
+
+**Web UI İçin (ÖNERİLEN!):**
+1. `start_ui.bat` dosyasına çift tıkla
+2. Browser'da otomatik açılır: http://localhost:5000
+3. "Yenile" butonuna bas → Canlı veri gelir!
+4. Otomatik yenileme özelliği var (1-30 dk arası)
+5. UI sürekli açık kalır, batch dosyasını tekrar çalıştırmaya gerek yok!
 
 **HTML Rapor İçin:**
 1. `generate_report.bat` dosyasına çift tıkla
@@ -63,6 +73,9 @@ TELEGRAM_BOT_TOKEN = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 #### 3. Botu Başlat
 
 ```bash
+# Web UI (önerilen - interaktif browser arayüzü)
+python web_ui.py
+
 # Telegram bot
 python telegram_bot.py
 
@@ -186,7 +199,101 @@ Bir coin'in, toplam market hacmindeki payı. BTC %35.2 ise, toplam paranın %35.
 
 ---
 
+## 🌐 Web UI (İnteraktif Browser Arayüzü)
+
+### Nedir?
+
+Web UI, browser'da çalışan interaktif bir arayüzdür. Batch dosyasını her seferinde çalıştırmak yerine, bir kez başlatıp browser'da sürekli açık tutabilirsiniz.
+
+### Özellikler
+
+- 🔄 **Manuel Yenileme**: "Yenile" butonuna basınca canlı veri çeker
+- ⏰ **Otomatik Yenileme**: 1-30 dakika arası otomatik güncelleme
+- 🎨 **Modern Tasarım**: Gradient, animasyonlar, responsive
+- 📊 **Canlı İstatistikler**: Risk, Top 10 Dominance, coin sayısı
+- ⚙️ **Ayarlanabilir**: Coin sayısı (10-50), yenileme süresi
+- 💾 **LocalStorage**: Ayarlarınız kaydedilir
+- 🔄 **Loading Animasyonu**: Veri çekilirken spinner gösterir
+
+### Nasıl Kullanılır?
+
+#### Windows:
+```cmd
+start_ui.bat
+```
+
+#### Linux/Mac:
+```bash
+python web_ui.py
+```
+
+Browser'da otomatik açılır: **http://localhost:5000**
+
+### UI Kontrolleri
+
+| Kontrol | Açıklama |
+|---------|----------|
+| 🔄 Yenile | Manuel veri yenileme (30-60 sn) |
+| ⏰ Otomatik Yenileme | Belirli aralıklarla otomatik güncelleme |
+| Coin Sayısı | Top 10 / 20 / 30 / 50 seçenekleri |
+| Otomatik Yenileme Süresi | 1 / 5 / 10 / 30 dakika |
+
+### Avantajları
+
+**Web UI vs Static HTML:**
+- ✅ Batch dosyasını her seferinde çalıştırmaya gerek yok
+- ✅ UI açık kalır, istediğiniz zaman yenileyin
+- ✅ Otomatik yenileme ile hands-free kullanım
+- ✅ Ayarlar kaydedilir (LocalStorage)
+- ✅ Modern, responsive tasarım
+- ✅ Loading feedback (ne olduğunu bilirsiniz)
+
+**Web UI vs Telegram Bot:**
+- ✅ Bot token'a ihtiyaç yok
+- ✅ Büyük ekranda daha iyi görünüm
+- ✅ Daha hızlı erişim (local)
+- ✅ Birden fazla coin sayısı seçeneği
+
+### Ekran Görüntüsü
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ 💰 Market Cash Flow Analyzer    [🔄 Yenile] [⏰ Oto]   │
+├──────────────────────────────────────────────────────────┤
+│ Coin Sayısı: [Top 30 ▼]  Oto Yenileme: [5 dakika ▼]    │
+├──────────────────────────────────────────────────────────┤
+│ Son Güncelleme: 09.11.2025 03:00 | Risk: MEDIUM         │
+│ Top 10 Dominance: %75.2 | Analiz Edilen: 570 coin       │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│                   [HTML RAPOR BURDA]                     │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 🪟 Windows Bat Dosyaları
+
+### `start_ui.bat`
+Web UI'yi başlatır (önerilen yöntem).
+
+**Ne yapar?**
+- Flask bağımlılığını kontrol eder
+- Web server başlatır
+- Browser'da otomatik açar (http://localhost:5000)
+- Sürekli çalışır, Ctrl+C ile durdurulur
+
+**Kullanım:**
+1. Çift tıkla
+2. Browser'da UI açılır
+3. "Yenile" butonuna bas
+4. İstersen otomatik yenilemeyi aç
+
+**💡 İpucu:**
+- UI açık kalır, batch dosyasını kapatmayın!
+- Browser sekmesini bookmark yapın
+- Her gün aynı sekmeden kullanın
 
 ### `start_bot.bat`
 Telegram botunu başlatır (tek tıkla).
@@ -389,15 +496,21 @@ Top N coin analizi döner.
 
 ```
 cashflow-bot/
-├── cashflow_analyzer.py   # Ana analiz motoru (400 satır)
-├── telegram_bot.py         # Telegram bot (150 satır)
+├── cashflow_analyzer.py   # Ana analiz motoru (800 satır)
+├── web_ui.py               # Web UI - İnteraktif browser arayüzü (300 satır) ⭐ ÖNERİLEN
+├── telegram_bot.py         # Telegram bot (220 satır)
 ├── api.py                  # REST API (140 satır)
+├── generate_report.py      # Standalone HTML rapor oluşturucu (110 satır)
 ├── config.py               # Ayarlar
 ├── requirements.txt        # Bağımlılıklar
+├── start_ui.bat            # Web UI başlatıcı (Windows) ⭐
+├── start_bot.bat           # Telegram bot başlatıcı (Windows)
+├── generate_report.bat     # HTML rapor oluşturucu (Windows)
+├── quick_report.bat        # Hızlı özet (Windows)
 └── README.md               # Bu dosya
 ```
 
-**Toplam:** ~700 satır temiz kod, bağımlılıklar minimal.
+**Toplam:** ~1600 satır temiz kod, minimal bağımlılıklar (pandas, requests, flask).
 
 ---
 
