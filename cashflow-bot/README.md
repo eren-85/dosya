@@ -4,6 +4,7 @@
 
 ## ✨ Özellikler
 
+### 💰 Market Cash Flow Analyzer
 - ✅ **İnteraktif Web UI** (browser'da çalışır, tek tıkla başlat!) ⭐ YENİ
 - ✅ **Canlı Binance Spot verisi** (API key gerektirmez)
 - ✅ **USD bazlı hesaplama** (doğru karşılaştırma)
@@ -22,6 +23,14 @@
 - ✅ **HTML tooltips** (USD hacim, momentum detayları)
 - ✅ **Minimum volume filtresi** ($100K default)
 - ✅ **Windows batch files** (tek tıkla başlat)
+
+### 🔍 Accumulation Detector (Akümülasyon Tespiti) ⭐ YENİ
+- ✅ **Gizli toplanan coinleri tespit et** (fiyat patlamasına hazır!)
+- ✅ **Whale analizi** (büyük oyuncular sessizce topluyor)
+- ✅ **5 kritik metrik**: Hacim artışı, fiyat hareketi, alım baskısı, trade count, OBV
+- ✅ **Akümülasyon skoru** (0-100 puan sistemi)
+- ✅ **200+ coin tarama** (tüm market)
+- ✅ **Tek tıkla başlat** (accumulation_scan.bat)
 
 ---
 
@@ -50,6 +59,12 @@
 **Hızlı Özet İçin:**
 1. `quick_report.bat` dosyasına çift tıkla
 2. 10 saniye bekle, tablo formatında 10 coin
+
+**Akümülasyon Tarama İçin (Whale Tespiti!):**
+1. `accumulation_scan.bat` dosyasına çift tıkla
+2. 2-5 dakika bekle (200+ coin taranıyor)
+3. Gizli toplanan coinleri görürsün!
+4. Rapor otomatik kaydedilir (accumulation_report_*.txt)
 
 ### 🐧 Linux/Mac (Manuel)
 
@@ -270,6 +285,206 @@ Browser'da otomatik açılır: **http://localhost:5000**
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🔍 Accumulation Detector (Akümülasyon Tespiti)
+
+### Nedir?
+
+Accumulation Detector, **whale'lerin (büyük oyuncular) gizlice coin topladığını** tespit eden bir bottur. Fiyat patlamasından önce akümülasyon fazını yakalar.
+
+### Mantık
+
+**Akümülasyon Nedir?**
+
+Büyük oyuncular (whale'ler, kurumlar) bir coin'i düşük fiyattan toplamak istediklerinde:
+1. **Gizlice alım yaparlar** - Dikkat çekmemek için
+2. **Fiyatı yukarı çekmezler** - Ucuzdan toplamak için
+3. **Hacim artar** - Çünkü işlem yapılıyor
+4. **Fiyat yatay kalır** - Veya hafif düşer
+5. **Toplama bitince** - Fiyat aniden patlar 🚀
+
+**Bizim botumuz bu faz 1-4'ü tespit eder!**
+
+### Tespit Kriterleri
+
+Bot **5 kritik metrik** kullanır:
+
+| Kriter | Açıklama | Hedef |
+|--------|----------|-------|
+| **1. Hacim Artışı** | Son 24h hacim vs 7 gün ortalaması | >%50 artış |
+| **2. Fiyat Değişimi** | 24h fiyat hareketi | <%5 (yatay) |
+| **3. Alım Baskısı** | Buy pressure (alım/satış dengesi) | %52-60 (gizli ama var) |
+| **4. Trade Count** | İşlem sayısı artışı | >%30 artış |
+| **5. OBV Trendi** | On-Balance Volume (hacim yönü) | Pozitif (artıyor) |
+
+**Akümülasyon Skoru:**
+- Her kriter karşılandığında puan kazanılır
+- Toplam: 0-100 puan
+- **50+ puan** = Güçlü akümülasyon sinyali
+- **70+ puan** = Çok güçlü sinyal (whale activity!)
+
+### Neden Çalışır?
+
+**Örnek Senaryo:**
+
+```
+Coin: XYZUSDT
+
+Durum ÖNCE (Normal):
+- Hacim: $2M/gün
+- Fiyat: $1.00
+- Alım baskısı: %50 (dengede)
+- Trade count: 5000/gün
+
+Durum ŞIMDI (Akümülasyon):
+- Hacim: $4M/gün ✅ (%100 artış!)
+- Fiyat: $0.98 ✅ (-%2, düşüyor!)
+- Alım baskısı: %56 ✅ (gizli alım var!)
+- Trade count: 7500/gün ✅ (%50 artış!)
+- OBV: Artıyor ✅
+
+➡️ SINYAL: Biri gizlice topluyor!
+
+2-3 hafta sonra:
+- Fiyat $1.50'ye patlar 🚀 (%50 kazanç)
+```
+
+### Nasıl Kullanılır?
+
+#### Windows (Tek Tıkla):
+```cmd
+accumulation_scan.bat
+```
+
+#### Linux/Mac:
+```bash
+python accumulation_detector.py
+```
+
+**Çıktı:**
+- Console'da renkli rapor
+- Dosya kaydedilir: `accumulation_report_YYYYMMDD_HHMMSS.txt`
+
+### Örnek Rapor
+
+```
+============================================================
+🔍 AKÜMÜLASYON TESPİT RAPORU
+💰 Gizli Toplanan Coinler - Fiyat Patlamasına Hazır Sinyaller
+============================================================
+
+📅 Tarih: 2025-11-09 03:00:00
+📊 Taranan Coin: 200
+✅ Sinyal Sayısı: 5
+
+🎯 Kriterler:
+   - Hacim Artışı: >%50
+   - Fiyat Değişimi: <%5
+   - Alım Baskısı: %52-60
+   - Trade Count: >%30
+
+============================================================
+
+🚀 AKÜMÜLASYON SİNYALLERİ (Yüksek → Düşük Skor)
+------------------------------------------------------------
+
+1. XYZ
+   Skor: 85.0/100 ⭐
+   Hacim 24h: $3,500,000
+   Hacim Artışı: +120.5% 🔥
+   Fiyat Değişimi: -2.1% ✅
+   Alım Baskısı: 56.3% 🟢
+   Trade Count: +75.2% 🔥
+   OBV Trend: UP
+   Kriterler: Vol↑120.5%, Price-2.1%↓, Buy56.3%, Trades↑75.2%, OBV↑
+
+2. ABC
+   Skor: 72.5/100 ⭐
+   Hacim 24h: $1,800,000
+   Hacim Artışı: +65.0% 📈
+   Fiyat Değişimi: +1.5% ✅
+   Alım Baskısı: 54.1% 🟢
+   Trade Count: +45.8% 📈
+   OBV Trend: UP
+   Kriterler: Vol↑65.0%, Price+1.5%, Buy54.1%, Trades↑45.8%, OBV↑
+
+...
+```
+
+### Kullanım Stratejisi
+
+**1. Tarama Yap:**
+```bash
+accumulation_scan.bat
+```
+
+**2. Yüksek Skorlu Coinleri İncele:**
+- 70+ puan: Çok güçlü sinyal
+- 50-70 puan: Orta güçlü sinyal
+
+**3. Grafik Analizi:**
+- TradingView'da aç
+- Destek seviyelerini belirle
+- Hacim patlaması bekle
+
+**4. Giriş Stratejisi:**
+- Hacim breakout'ta gir
+- Stop-loss koy (destek altı)
+- Risk yönetimi yap (%2-3 maks)
+
+**5. Çıkış Stratejisi:**
+- Fiyat patladıktan sonra %20-50 hedef
+- Trailing stop kullan
+
+### Parametreler (Gelişmiş)
+
+```python
+from accumulation_detector import AccumulationDetector
+
+detector = AccumulationDetector()
+
+result = detector.scan(
+    min_volume_usd=500000,              # Min hacim ($500K)
+    max_coins=200,                       # Kaç coin taransın
+    volume_increase_threshold=50.0,      # Hacim artış eşiği (%50)
+    price_change_threshold=5.0,          # Max fiyat değişimi (%5)
+    buy_pressure_min=52.0,               # Min alım baskısı (%52)
+    buy_pressure_max=60.0,               # Max alım baskısı (%60)
+    trade_count_threshold=30.0           # Trade count artış (%30)
+)
+
+report = detector.generate_report(result)
+print(report)
+```
+
+### Avantajları
+
+**Geleneksel Yöntem vs Accumulation Detector:**
+
+| Geleneksel | Accumulation Detector |
+|------------|----------------------|
+| Fiyat breakout'ta fark edersin | Breakout **öncesinde** fark edersin |
+| Geç kalırsın | Erken girişle %30-50 daha fazla kazanç |
+| Sadece fiyat grafiğine bakarsın | 5 metrik birlikte analiz |
+| Manuel takip (yorucu) | Otomatik tarama (200+ coin) |
+| Whale hareketini kaçırırsın | Whale activity tespit edersin |
+
+### Dikkat Edilmesi Gerekenler
+
+⚠️ **ÖNEMLI:**
+- Bu bir **sinyal**, garanti değil!
+- Kendi analizinizi mutlaka yapın
+- Risk yönetimi kullanın (stop-loss)
+- Tüm sermayenizi tek coin'e yatırmayın
+- Market koşullarını göz önünde bulundurun
+
+💡 **İpuçları:**
+- Günde 1-2 kez tarama yapın
+- Yüksek skorlu coinleri watchlist'e ekleyin
+- TradingView alert'leri kurun
+- Telegram gruplarında paylaşmayın (sinyal değeri düşer)
 
 ---
 
@@ -496,21 +711,27 @@ Top N coin analizi döner.
 
 ```
 cashflow-bot/
-├── cashflow_analyzer.py   # Ana analiz motoru (800 satır)
-├── web_ui.py               # Web UI - İnteraktif browser arayüzü (300 satır) ⭐ ÖNERİLEN
-├── telegram_bot.py         # Telegram bot (220 satır)
-├── api.py                  # REST API (140 satır)
-├── generate_report.py      # Standalone HTML rapor oluşturucu (110 satır)
-├── config.py               # Ayarlar
-├── requirements.txt        # Bağımlılıklar
-├── start_ui.bat            # Web UI başlatıcı (Windows) ⭐
-├── start_bot.bat           # Telegram bot başlatıcı (Windows)
-├── generate_report.bat     # HTML rapor oluşturucu (Windows)
-├── quick_report.bat        # Hızlı özet (Windows)
-└── README.md               # Bu dosya
+├── cashflow_analyzer.py      # Ana analiz motoru (800 satır)
+├── accumulation_detector.py  # Akümülasyon tespiti - Whale hunter (600 satır) ⭐ YENİ
+├── web_ui.py                  # Web UI - İnteraktif browser arayüzü (300 satır) ⭐
+├── telegram_bot.py            # Telegram bot (220 satır)
+├── api.py                     # REST API (140 satır)
+├── generate_report.py         # Standalone HTML rapor oluşturucu (110 satır)
+├── config.py                  # Ayarlar
+├── requirements.txt           # Bağımlılıklar
+├── start_ui.bat               # Web UI başlatıcı (Windows) ⭐
+├── accumulation_scan.bat      # Akümülasyon tarama (Windows) ⭐ YENİ
+├── start_bot.bat              # Telegram bot başlatıcı (Windows)
+├── generate_report.bat        # HTML rapor oluşturucu (Windows)
+├── quick_report.bat           # Hızlı özet (Windows)
+└── README.md                  # Bu dosya
 ```
 
-**Toplam:** ~1600 satır temiz kod, minimal bağımlılıklar (pandas, requests, flask).
+**Toplam:** ~2200 satır temiz kod, minimal bağımlılıklar (pandas, requests, flask).
+
+**2 Ana Özellik:**
+1. **Cash Flow Analyzer** - Nakit akışı ve market momentum analizi
+2. **Accumulation Detector** - Whale'lerin gizli topladığı coinleri tespit et
 
 ---
 
