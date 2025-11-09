@@ -376,8 +376,8 @@ HTML_TEMPLATE = """
         <div class="header">
             <h1>💰 Market Analyzer - Cash Flow & Whale Hunter</h1>
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('cashflow')">📊 Cash Flow</button>
-                <button class="tab" onclick="switchTab('accumulation')">🐋 Whale Signals</button>
+                <button class="tab active" onclick="switchTab(this, 'cashflow')">📊 Cash Flow</button>
+                <button class="tab" onclick="switchTab(this, 'accumulation')">🐋 Whale Signals</button>
             </div>
         </div>
 
@@ -408,7 +408,7 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <div class="control-section" id="accumulationControls">
+            <div class="control-section" id="accumulationControls" style="display: none;">
                 <h3>🔍 Akümülasyon Parametreleri (Whale Tespiti)</h3>
                 <div class="control-row">
                     <div class="control-item">
@@ -489,12 +489,12 @@ HTML_TEMPLATE = """
         let currentTab = 'cashflow';
 
         // Tab switching
-        function switchTab(tab) {
+        function switchTab(element, tab) {
             currentTab = tab;
 
             // Update tab buttons
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
+            element.classList.add('active');
 
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
