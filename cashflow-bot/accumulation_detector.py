@@ -159,7 +159,16 @@ class AccumulationDetector:
         buy_max: float,
         trade_threshold: float
     ) -> Optional[Dict[str, Any]]:
-        """Tek bir coin için akümülasyon analizi"""
+        """
+        Tek bir coin için akümülasyon analizi
+
+        CRITICAL FIXES APPLIED:
+        1. Buy pressure: Fixed index [10] for taker buy QUOTE volume (was [9] - wrong unit)
+        2. Volume increase: Added $100K minimum avg volume filter to prevent million% anomalies
+        3. Trade count: Filter out coins with decreasing activity (>-20%)
+        4. OBV scoring: Penalize OBV DOWN with -10 points (was neutral)
+        5. Data validation: Range checks for all metrics before signal generation
+        """
 
         # 24h ticker data
         ticker = self._get_24h_ticker(symbol)
@@ -200,23 +209,62 @@ class AccumulationDetector:
         volume_24h = float(ticker['quoteVolume'])
         volumes_7d = [float(k[5]) for k in klines_7d]  # quote volume
         avg_volume_7d = np.mean(volumes_7d)
+
+        # VALIDATION: Skip if 7-day average is too low (prevents million% anomalies)
+        MIN_AVG_VOLUME = 100000  # $100K minimum
+        if avg_volume_7d < MIN_AVG_VOLUME:
+            logger.debug(f"⚠️ {symbol} - Volume too low: ${avg_volume_7d:,.0f}")
+            return None
+
         volume_increase = ((volume_24h / avg_volume_7d) - 1) * 100
+
+        # VALIDATION: Cap extreme volume increases (data quality check)
+        if volume_increase > 10000:  # >10,000% is likely data error
+            logger.warning(f"⚠️ {symbol} - Extreme volume increase: {volume_increase:.0f}%")
+            return None
 
         # 2. Fiyat değişimi (24h)
         price_change = float(ticker['priceChangePercent'])
 
         # 3. Alım baskısı (taker buy / total volume)
-        buy_volumes = [float(k[9]) for k in klines_1d]  # taker buy quote volume
+        # FIX: Index [10] is taker buy QUOTE volume (USDT), not [9] (base asset)
+        buy_volumes = [float(k[10]) for k in klines_1d]  # taker buy quote volume (FIXED!)
         total_volumes = [float(k[7]) for k in klines_1d]  # quote volume
         buy_pressure = (sum(buy_volumes) / sum(total_volumes) * 100) if sum(total_volumes) > 0 else 0
+
+        # VALIDATION: Buy pressure must be 0-100%
+        if buy_pressure < 0 or buy_pressure > 100:
+            logger.warning(f"⚠️ {symbol} - Invalid buy pressure: {buy_pressure:.1f}%")
+            return None
 
         # 4. Trade count artışı
         trade_count_24h = float(ticker['count'])
         avg_trade_count_7d = np.mean([float(k[8]) for k in klines_7d])  # number of trades
         trade_count_increase = ((trade_count_24h / avg_trade_count_7d) - 1) * 100 if avg_trade_count_7d > 0 else 0
 
+        # VALIDATION: Skip if trade count is decreasing (not accumulation)
+        # Negative trade count increase means less activity = distribution or dead coin
+        if trade_count_increase < -20:  # More than 20% decrease
+            logger.debug(f"⚠️ {symbol} - Trade count decreasing: {trade_count_increase:.1f}%")
+            return None
+
         # 5. OBV (On-Balance Volume) trendi
         obv_trend = self._calculate_obv_trend(klines_1d)
+
+        # === DATA QUALITY VALIDATION ===
+        # Ensure all metrics are within reasonable ranges before proceeding
+
+        # Volume increase should be reasonable (not millions of %)
+        if volume_increase < -50 or volume_increase > 5000:
+            logger.debug(f"⚠️ {symbol} - Suspicious volume increase: {volume_increase:.1f}%")
+            return None
+
+        # Buy pressure already validated (0-100%)
+
+        # Price change should be reasonable for 24h period
+        if abs(price_change) > 100:  # >100% in 24h is extremely rare
+            logger.debug(f"⚠️ {symbol} - Extreme price change: {price_change:.1f}%")
+            return None
 
         # === DISTRIBUTION FİLTRESİ (ÇOK ÖNEMLİ!) ===
 
@@ -276,6 +324,10 @@ class AccumulationDetector:
         if obv_trend > 0:
             criteria_met.append(f"OBV↑")
             score += 5
+        else:
+            # OBV DOWN is a NEGATIVE signal for accumulation
+            criteria_met.append(f"OBV↓")
+            score -= 10  # Penalize heavily - this contradicts accumulation
 
         # === SİNYAL DEĞERLENDİRME ===
 
