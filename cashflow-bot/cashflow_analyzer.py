@@ -230,8 +230,12 @@ class CashFlowAnalyzer:
             indicators = ''.join(['🔼' if buyer_pcts[tf] >= 50 else '🔻'
                                  for tf in ['15m', '1h', '4h', '12h', '1d']])
 
+            # Son fiyat (close price)
+            current_price = float(df.iloc[-1]['close']) if len(df) > 0 else 0.0
+
             flows.append({
                 'symbol': symbol,
+                'current_price': current_price,  # YENİ: Anlık fiyat
                 'cash_share': cash_share,
                 'buyer_15m': buyer_pcts['15m'],
                 'buyer_1h': buyer_pcts['1h'],
@@ -331,8 +335,20 @@ class CashFlowAnalyzer:
         # Top coins
         for coin in flows[:30]:
             sym = coin['symbol'].replace('USDT', '')
+            current_price = coin.get('current_price', 0.0)
+
+            # Format price
+            if current_price >= 1000:
+                price_str = f"${current_price:,.0f}"
+            elif current_price >= 1:
+                price_str = f"${current_price:,.2f}"
+            elif current_price >= 0.01:
+                price_str = f"${current_price:.4f}"
+            else:
+                price_str = f"${current_price:.6f}"
+
             lines.append(
-                f"{sym} Nakit:%{coin['cash_share']:.1f} "
+                f"{sym} ({price_str}) Nakit:%{coin['cash_share']:.1f} "
                 f"15m:%{coin['buyer_15m']:.0f} "
                 f"Mts:{coin['momentum']:.1f} {coin['indicators']}"
             )
@@ -692,6 +708,7 @@ class CashFlowAnalyzer:
         for coin in flows:
             sym = coin['symbol'].replace('USDT', '')
             vol_usd = coin['total_volume']
+            current_price = coin.get('current_price', 0.0)
 
             # Format volume for tooltip
             if vol_usd >= 1e9:
@@ -700,6 +717,16 @@ class CashFlowAnalyzer:
                 vol_str = f"${vol_usd/1e6:.2f}M"
             else:
                 vol_str = f"${vol_usd/1e3:.2f}K"
+
+            # Format price
+            if current_price >= 1000:
+                price_str = f"${current_price:,.0f}"
+            elif current_price >= 1:
+                price_str = f"${current_price:,.2f}"
+            elif current_price >= 0.01:
+                price_str = f"${current_price:.4f}"
+            else:
+                price_str = f"${current_price:.6f}"
 
             ind_15m = '🔼' if coin['buyer_15m'] >= 50 else '🔻'
             ind_1h = '🔼' if coin['buyer_1h'] >= 50 else '🔻'
@@ -711,8 +738,10 @@ class CashFlowAnalyzer:
                     <tr>
                         <td class="tooltip">
                             <span class="coin-symbol">{sym}</span>
+                            <span style="font-size: 12px; color: #64748b; margin-left: 8px;">{price_str}</span>
                             <span class="tooltiptext">
                                 <strong>{coin['symbol']}</strong><br>
+                                Fiyat: {price_str}<br>
                                 24h Hacim: {vol_str}<br>
                                 Nakit Payı: %{coin['cash_share']:.2f}<br>
                                 Momentum: {coin['momentum']:.2f}X
