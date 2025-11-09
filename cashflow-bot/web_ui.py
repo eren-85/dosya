@@ -17,12 +17,13 @@ Kullanım:
 Browser'da otomatik açılır: http://localhost:5000
 """
 
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, Response, stream_with_context
 from cashflow_analyzer import CashFlowAnalyzer
 from accumulation_detector import AccumulationDetector
 import webbrowser
 import threading
 import time
+import json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -257,6 +258,17 @@ HTML_TEMPLATE = """
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .loading p {
@@ -528,12 +540,177 @@ HTML_TEMPLATE = """
         }
 
         // Veri yenile
+        // REAL-TIME STREAMING SCAN (Whale Signals için)
+        let currentEventSource = null;
+        let accumulationSignals = [];
+
+        function startStreamingScan() {
+            const refreshBtn = document.querySelector('.btn-refresh');
+            const loading = document.getElementById('loading');
+            const accumulationContent = document.getElementById('accumulationData');
+
+            // Eğer önceki stream varsa kapat
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+
+            // Ayarları kaydet
+            saveSettings();
+
+            // Butonu disable et
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '⏳ Taranıyor...';
+
+            // Sinyalleri temizle
+            accumulationSignals = [];
+
+            // İlk mesaj
+            accumulationContent.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <h2 style="color: #667eea;">🔍 TÜM Binance Coinleri Taranıyor...</h2>
+                    <p style="font-size: 16px; margin-top: 10px;">Her sinyal bulunduğunda anında görünecek!</p>
+                    <div id="scanProgress" style="margin-top: 20px; font-size: 14px; color: #888;"></div>
+                    <div id="signalsContainer" class="accumulation-grid" style="margin-top: 30px;"></div>
+                </div>
+            `;
+
+            // EventSource oluştur
+            const params = new URLSearchParams({
+                volume_threshold: document.getElementById('volumeThreshold').value,
+                price_threshold: document.getElementById('priceThreshold').value,
+                buy_pressure_min: document.getElementById('buyPressureMin').value,
+                buy_pressure_max: document.getElementById('buyPressureMax').value,
+                trade_threshold: document.getElementById('tradeThreshold').value
+            });
+
+            currentEventSource = new EventSource(`/api/scan_stream?${params}`);
+
+            currentEventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const progressDiv = document.getElementById('scanProgress');
+                const signalsContainer = document.getElementById('signalsContainer');
+
+                if (data.type === 'start') {
+                    progressDiv.innerHTML = `📊 ${data.total_coins} coin taranacak...`;
+                }
+                else if (data.type === 'progress') {
+                    progressDiv.innerHTML = `⏳ ${data.scanned}/${data.total} coin tarandı (${data.percent}%) - ${data.signals_found} sinyal bulundu`;
+                }
+                else if (data.type === 'signal') {
+                    // YENİ SİNYAL BULUNDU - ANINDA EKLE!
+                    const signal = data.data;
+                    accumulationSignals.push(signal);
+
+                    // Skorları sırala (en yüksek üstte)
+                    accumulationSignals.sort((a, b) => b.accumulation_score - a.accumulation_score);
+
+                    // Tüm sinyalleri yeniden render et
+                    renderAccumulationSignals(signalsContainer);
+                }
+                else if (data.type === 'complete') {
+                    progressDiv.innerHTML = `✅ Tarama tamamlandı! ${data.total_scanned} coin tarandı, ${data.signals_found} sinyal bulundu.`;
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                    currentEventSource.close();
+                    currentEventSource = null;
+
+                    // Whale Signals sayısını güncelle
+                    document.getElementById('whaleSignals').textContent = data.signals_found;
+                }
+                else if (data.type === 'error') {
+                    accumulationContent.innerHTML = `<div class="error">❌ Hata: ${data.message}</div>`;
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+            };
+
+            currentEventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                const progressDiv = document.getElementById('scanProgress');
+                if (progressDiv) {
+                    progressDiv.innerHTML = '❌ Bağlantı hatası! Lütfen tekrar deneyin.';
+                }
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                if (currentEventSource) {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+            };
+        }
+
+        function renderAccumulationSignals(container) {
+            let html = '';
+            accumulationSignals.forEach((signal, index) => {
+                const highScore = signal.accumulation_score >= 70;
+                const pricePos = signal.price_position || 50;
+                const priceChange30d = signal.price_change_30d || 0;
+                const positionLabel = pricePos < 30 ? '🟢DİP' : pricePos < 60 ? '🟡ORTA' : '🔴TEPE';
+
+                html += `
+                    <div class="accumulation-card ${highScore ? 'high-score' : ''}" style="animation: slideIn 0.3s ease;">
+                        <div style="position: absolute; top: 10px; right: 10px; font-size: 12px; color: #888;">#${index + 1}</div>
+                        <h3>${signal.symbol}</h3>
+                        <div class="score">${signal.accumulation_score.toFixed(1)}/100 ⭐</div>
+                        <div class="metrics">
+                            <div class="metric">
+                                <strong>Hacim:</strong>
+                                <span>$${signal.volume_24h.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
+                            </div>
+                            <div class="metric">
+                                <strong>Vol Artış:</strong>
+                                <span>${signal.volume_increase > 0 ? '+' : ''}${signal.volume_increase.toFixed(1)}% ${signal.volume_increase > 100 ? '🔥' : '📈'}</span>
+                            </div>
+                            <div class="metric">
+                                <strong>Fiyat 30d:</strong>
+                                <span>${priceChange30d > 0 ? '+' : ''}${priceChange30d.toFixed(1)}%</span>
+                            </div>
+                            <div class="metric">
+                                <strong>Pozisyon:</strong>
+                                <span>${pricePos.toFixed(0)}% ${positionLabel}</span>
+                            </div>
+                            <div class="metric">
+                                <strong>Fiyat 24h:</strong>
+                                <span>${signal.price_change > 0 ? '+' : ''}${signal.price_change.toFixed(2)}% ${Math.abs(signal.price_change) < 3 ? '✅' : '📊'}</span>
+                            </div>
+                            <div class="metric">
+                                <strong>Alım:</strong>
+                                <span>${signal.buy_pressure.toFixed(1)}% ${signal.buy_pressure >= 52 && signal.buy_pressure <= 58 ? '🟢' : '🟡'}</span>
+                            </div>
+                            <div class="metric">
+                                <strong>Trade:</strong>
+                                <span>${signal.trade_count_increase > 0 ? '+' : ''}${signal.trade_count_increase.toFixed(1)}% ${signal.trade_count_increase > 50 ? '🔥' : '📈'}</span>
+                            </div>
+                            <div class="metric">
+                                <strong>OBV:</strong>
+                                <span>${signal.obv_trend}</span>
+                            </div>
+                        </div>
+                        <div class="criteria">
+                            ✅ Kriterler: ${signal.criteria_met.join(', ')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
         async function refreshData() {
             const refreshBtn = document.querySelector('.btn-refresh');
             const loading = document.getElementById('loading');
             const cashflowContent = document.getElementById('cashflowData');
             const accumulationContent = document.getElementById('accumulationData');
 
+            // Eğer Whale Signals tab'ındaysak, streaming kullan
+            if (currentTab === 'accumulation') {
+                startStreamingScan();
+                return;
+            }
+
+            // Cash Flow için eski method
             // Ayarları kaydet
             saveSettings();
 
@@ -708,6 +885,37 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 
+@app.route('/api/scan_stream')
+def api_scan_stream():
+    """REAL-TIME Accumulation Scan - Server-Sent Events (SSE)"""
+    def generate():
+        try:
+            # Parametreleri al
+            volume_threshold = request.args.get('volume_threshold', 50.0, type=float)
+            price_threshold = request.args.get('price_threshold', 5.0, type=float)
+            buy_pressure_min = request.args.get('buy_pressure_min', 52.0, type=float)
+            buy_pressure_max = request.args.get('buy_pressure_max', 60.0, type=float)
+            trade_threshold = request.args.get('trade_threshold', 30.0, type=float)
+
+            # STREAMING scan başlat (TÜM coinler!)
+            for event in accumulation_detector.scan_stream(
+                min_volume_usd=100000,
+                max_coins=None,  # TÜM coinleri tara!
+                volume_increase_threshold=volume_threshold,
+                price_change_threshold=price_threshold,
+                buy_pressure_min=buy_pressure_min,
+                buy_pressure_max=buy_pressure_max,
+                trade_count_threshold=trade_threshold
+            ):
+                # Server-Sent Events formatı
+                yield f"data: {json.dumps(event)}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+
 @app.route('/api/refresh')
 def api_refresh():
     """Veri yenileme API endpoint'i - Cash Flow + Accumulation"""
@@ -729,7 +937,7 @@ def api_refresh():
                 'message': cashflow_report.get('message', 'Cash flow analizi başarısız')
             })
 
-        # 2. Accumulation Detection
+        # 2. Accumulation Detection (OLD METHOD - artık streaming kullanılmalı)
         accumulation_result = accumulation_detector.scan(
             min_volume_usd=100000,
             max_coins=200,

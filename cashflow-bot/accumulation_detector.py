@@ -47,6 +47,89 @@ class AccumulationDetector:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
 
+    def scan_stream(
+        self,
+        min_volume_usd: float = 500000,
+        max_coins: int = None,  # None = TÜM coinleri tara!
+        volume_increase_threshold: float = 50.0,
+        price_change_threshold: float = 5.0,
+        buy_pressure_min: float = 52.0,
+        buy_pressure_max: float = 60.0,
+        trade_count_threshold: float = 30.0
+    ):
+        """
+        Akümülasyon sinyalleri tara - STREAMING (real-time)
+
+        Her sinyali bulduğu anda yield eder (beklemez!)
+
+        Yields:
+            Dict: Her bulunan sinyal + progress bilgisi
+        """
+        logger.info(f"🔍 Streaming akümülasyon taraması başlıyor...")
+        logger.info(f"📊 Kriterler: Vol↑%{volume_increase_threshold}, Price<%{price_change_threshold}, Buy%{buy_pressure_min}-{buy_pressure_max}")
+
+        # 1. Coinleri al (TÜM coinler!)
+        symbols = self._get_active_coins(min_volume_usd, max_coins or 999999)
+        total_symbols = len(symbols)
+        logger.info(f"📈 {total_symbols} coin taranacak (min volume: ${min_volume_usd:,.0f})")
+
+        # İlk mesaj: Başlangıç
+        yield {
+            'type': 'start',
+            'total_coins': total_symbols,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        signals_found = 0
+
+        # 2. Her coin için akümülasyon analizi (STREAMING!)
+        for i, symbol in enumerate(symbols):
+            try:
+                # Progress update her 10 coinde bir
+                if (i + 1) % 10 == 0:
+                    yield {
+                        'type': 'progress',
+                        'scanned': i + 1,
+                        'total': total_symbols,
+                        'signals_found': signals_found,
+                        'percent': round((i + 1) / total_symbols * 100, 1)
+                    }
+
+                signal = self._analyze_accumulation(
+                    symbol,
+                    volume_increase_threshold,
+                    price_change_threshold,
+                    buy_pressure_min,
+                    buy_pressure_max,
+                    trade_count_threshold
+                )
+
+                # SINYAL BULUNDU - HEMEN GÖNDER!
+                if signal:
+                    signals_found += 1
+                    logger.info(f"✅ Sinyal: {symbol} - Skor: {signal['accumulation_score']:.1f}")
+                    yield {
+                        'type': 'signal',
+                        'data': signal,
+                        'signal_number': signals_found
+                    }
+
+                time.sleep(0.15)  # Rate limit (biraz hızlandırdık)
+
+            except Exception as e:
+                logger.debug(f"⚠️ {symbol} analiz hatası: {e}")
+                continue
+
+        # Son mesaj: Tamamlandı
+        yield {
+            'type': 'complete',
+            'total_scanned': total_symbols,
+            'signals_found': signals_found,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        logger.info(f"✅ Tarama tamamlandı! {signals_found} akümülasyon sinyali bulundu")
+
     def scan(
         self,
         min_volume_usd: float = 500000,
