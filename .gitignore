@@ -107,3 +107,8 @@ temp/
 *.key
 *.crt
 secrets/
+
+# Generated Reports
+accumulation_report_*.txt
+cashflow_report_*.html
+cf.html
