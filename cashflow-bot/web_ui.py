@@ -53,7 +53,7 @@ HTML_TEMPLATE = """
         }
 
         .container {
-            max-width: 1800px;
+            max-width: 95%;
             margin: 0 auto;
         }
 
@@ -309,7 +309,7 @@ HTML_TEMPLATE = """
 
         .accumulation-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 15px;
             margin-top: 20px;
         }
@@ -424,6 +424,15 @@ HTML_TEMPLATE = """
                 <h3>🔍 Akümülasyon Parametreleri (Whale Tespiti)</h3>
                 <div class="control-row">
                     <div class="control-item">
+                        <label>🎯 Taranacak Coin Sayısı:</label>
+                        <select id="maxCoins">
+                            <option value="0">TÜM Coinler (500+)</option>
+                            <option value="200">Top 200</option>
+                            <option value="300">Top 300</option>
+                            <option value="500">Top 500</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
                         <label>Hacim Artışı (%):</label>
                         <input type="number" id="volumeThreshold" value="50" min="0" max="200" step="10">
                     </div>
@@ -521,6 +530,7 @@ HTML_TEMPLATE = """
         function loadSettings() {
             document.getElementById('topN').value = localStorage.getItem('topN') || '30';
             document.getElementById('autoInterval').value = localStorage.getItem('autoInterval') || '300';
+            document.getElementById('maxCoins').value = localStorage.getItem('maxCoins') || '0';
             document.getElementById('volumeThreshold').value = localStorage.getItem('volumeThreshold') || '50';
             document.getElementById('priceThreshold').value = localStorage.getItem('priceThreshold') || '5';
             document.getElementById('buyPressureMin').value = localStorage.getItem('buyPressureMin') || '52';
@@ -532,6 +542,7 @@ HTML_TEMPLATE = """
         function saveSettings() {
             localStorage.setItem('topN', document.getElementById('topN').value);
             localStorage.setItem('autoInterval', document.getElementById('autoInterval').value);
+            localStorage.setItem('maxCoins', document.getElementById('maxCoins').value);
             localStorage.setItem('volumeThreshold', document.getElementById('volumeThreshold').value);
             localStorage.setItem('priceThreshold', document.getElementById('priceThreshold').value);
             localStorage.setItem('buyPressureMin', document.getElementById('buyPressureMin').value);
@@ -564,10 +575,14 @@ HTML_TEMPLATE = """
             // Sinyalleri temizle
             accumulationSignals = [];
 
+            // Coin sayısı kontrolü
+            const maxCoins = parseInt(document.getElementById('maxCoins').value);
+            const scanMessage = maxCoins === 0 ? 'TÜM Binance Coinleri' : `Top ${maxCoins} Coin`;
+
             // İlk mesaj
             accumulationContent.innerHTML = `
                 <div style="text-align: center; padding: 40px;">
-                    <h2 style="color: #667eea;">🔍 TÜM Binance Coinleri Taranıyor...</h2>
+                    <h2 style="color: #667eea;">🔍 ${scanMessage} Taranıyor...</h2>
                     <p style="font-size: 16px; margin-top: 10px;">Her sinyal bulunduğunda anında görünecek!</p>
                     <div id="scanProgress" style="margin-top: 20px; font-size: 14px; color: #888;"></div>
                     <div id="signalsContainer" class="accumulation-grid" style="margin-top: 30px;"></div>
@@ -576,6 +591,7 @@ HTML_TEMPLATE = """
 
             // EventSource oluştur
             const params = new URLSearchParams({
+                max_coins: maxCoins,
                 volume_threshold: document.getElementById('volumeThreshold').value,
                 price_threshold: document.getElementById('priceThreshold').value,
                 buy_pressure_min: document.getElementById('buyPressureMin').value,
@@ -1194,16 +1210,20 @@ def api_scan_stream():
     def generate():
         try:
             # Parametreleri al
+            max_coins_param = request.args.get('max_coins', 0, type=int)
             volume_threshold = request.args.get('volume_threshold', 50.0, type=float)
             price_threshold = request.args.get('price_threshold', 5.0, type=float)
             buy_pressure_min = request.args.get('buy_pressure_min', 52.0, type=float)
             buy_pressure_max = request.args.get('buy_pressure_max', 60.0, type=float)
             trade_threshold = request.args.get('trade_threshold', 30.0, type=float)
 
-            # STREAMING scan başlat (TÜM coinler!)
+            # max_coins: 0 = TÜM coinler (None), >0 = belirtilen sayı
+            max_coins = None if max_coins_param == 0 else max_coins_param
+
+            # STREAMING scan başlat
             for event in accumulation_detector.scan_stream(
                 min_volume_usd=100000,
-                max_coins=None,  # TÜM coinleri tara!
+                max_coins=max_coins,
                 volume_increase_threshold=volume_threshold,
                 price_change_threshold=price_threshold,
                 buy_pressure_min=buy_pressure_min,

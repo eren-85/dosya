@@ -499,8 +499,8 @@ class CashFlowAnalyzer:
         }}
         .metrics {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
             padding: 30px;
             background: #f8fafc;
         }}
