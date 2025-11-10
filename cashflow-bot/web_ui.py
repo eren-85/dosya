@@ -578,6 +578,12 @@ HTML_TEMPLATE = """
             const loading = document.getElementById('loading');
             const accumulationContent = document.getElementById('accumulationData');
 
+            // Null check - critical elements
+            if (!accumulationContent) {
+                console.error('accumulationData element not found');
+                return;
+            }
+
             // Eğer önceki stream varsa kapat
             if (currentEventSource) {
                 currentEventSource.close();
@@ -586,9 +592,11 @@ HTML_TEMPLATE = """
             // Ayarları kaydet
             saveSettings();
 
-            // Butonu disable et
-            refreshBtn.disabled = true;
-            refreshBtn.innerHTML = '⏳ Taranıyor...';
+            // Butonu disable et (null-safe)
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '⏳ Taranıyor...';
+            }
 
             // Sinyalleri temizle
             accumulationSignals = [];
@@ -650,18 +658,25 @@ HTML_TEMPLATE = """
                 }
                 else if (data.type === 'complete') {
                     progressDiv.innerHTML = `✅ Tarama tamamlandı! ${data.total_scanned} coin tarandı, ${data.signals_found} sinyal bulundu.`;
-                    refreshBtn.disabled = false;
-                    refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                    if (refreshBtn) {
+                        refreshBtn.disabled = false;
+                        refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                    }
                     currentEventSource.close();
                     currentEventSource = null;
 
                     // Whale Signals sayısını güncelle
-                    document.getElementById('whaleSignals').textContent = data.signals_found;
+                    const whaleSignalsEl = document.getElementById('whaleSignals');
+                    if (whaleSignalsEl) {
+                        whaleSignalsEl.textContent = data.signals_found;
+                    }
                 }
                 else if (data.type === 'error') {
                     accumulationContent.innerHTML = `<div class="error">❌ Hata: ${data.message}</div>`;
-                    refreshBtn.disabled = false;
-                    refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                    if (refreshBtn) {
+                        refreshBtn.disabled = false;
+                        refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                    }
                     currentEventSource.close();
                     currentEventSource = null;
                 }
@@ -673,8 +688,10 @@ HTML_TEMPLATE = """
                 if (progressDiv) {
                     progressDiv.innerHTML = '❌ Bağlantı hatası! Lütfen tekrar deneyin.';
                 }
-                refreshBtn.disabled = false;
-                refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 Yeniden Tara';
+                }
                 if (currentEventSource) {
                     currentEventSource.close();
                     currentEventSource = null;
@@ -1066,14 +1083,22 @@ HTML_TEMPLATE = """
             // Ayarları kaydet
             saveSettings();
 
-            // Butonu disable et
-            refreshBtn.disabled = true;
-            refreshBtn.innerHTML = '⏳ Yükleniyor...';
+            // Butonu disable et (null-safe)
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '⏳ Yükleniyor...';
+            }
 
-            // Loading göster
-            loading.classList.add('active');
-            cashflowContent.style.display = 'none';
-            accumulationContent.style.display = 'none';
+            // Loading göster (null-safe)
+            if (loading) {
+                loading.classList.add('active');
+            }
+            if (cashflowContent) {
+                cashflowContent.style.display = 'none';
+            }
+            if (accumulationContent) {
+                accumulationContent.style.display = 'none';
+            }
 
             try {
                 // Null-safe element access
@@ -1098,7 +1123,9 @@ HTML_TEMPLATE = """
 
                 if (data.status === 'success') {
                     // Cash Flow sonuçları
-                    cashflowContent.innerHTML = data.cashflow_html;
+                    if (cashflowContent) {
+                        cashflowContent.innerHTML = data.cashflow_html;
+                    }
 
                     // Accumulation sonuçları
                     if (data.accumulation_signals && data.accumulation_signals.length > 0) {
@@ -1157,50 +1184,85 @@ HTML_TEMPLATE = """
                         });
 
                         accHtml += '</div>';
-                        accumulationContent.innerHTML = accHtml;
+                        if (accumulationContent) {
+                            accumulationContent.innerHTML = accHtml;
+                        }
                     } else {
-                        accumulationContent.innerHTML = '<p class="empty-state">❌ Akümülasyon sinyali bulunamadı.<br>Kriterleri gevşeterek tekrar deneyin.</p>';
+                        if (accumulationContent) {
+                            accumulationContent.innerHTML = '<p class="empty-state">❌ Akümülasyon sinyali bulunamadı.<br>Kriterleri gevşeterek tekrar deneyin.</p>';
+                        }
                     }
 
-                    // Status bilgilerini güncelle
-                    document.getElementById('lastUpdate').textContent = new Date().toLocaleString('tr-TR');
-                    document.getElementById('riskLevel').textContent = data.risk.toUpperCase();
-                    document.getElementById('dominance').textContent = `%${data.dominance}`;
-                    document.getElementById('totalCoins').textContent = data.total_coins;
-                    document.getElementById('whaleSignals').textContent = data.accumulation_count;
-
-                    // Risk rengini ayarla
-                    const riskElement = document.getElementById('riskLevel');
-                    riskElement.style.color = data.risk === 'low' ? '#4CAF50' :
-                                               data.risk === 'medium' ? '#FF9800' : '#f44336';
+                    // Status bilgilerini güncelle (null-safe)
+                    const lastUpdateEl = document.getElementById('lastUpdate');
+                    if (lastUpdateEl) {
+                        lastUpdateEl.textContent = new Date().toLocaleString('tr-TR');
+                    }
+                    const riskLevelEl = document.getElementById('riskLevel');
+                    if (riskLevelEl) {
+                        riskLevelEl.textContent = data.risk.toUpperCase();
+                        riskLevelEl.style.color = data.risk === 'low' ? '#4CAF50' :
+                                                   data.risk === 'medium' ? '#FF9800' : '#f44336';
+                    }
+                    const dominanceEl = document.getElementById('dominance');
+                    if (dominanceEl) {
+                        dominanceEl.textContent = `%${data.dominance}`;
+                    }
+                    const totalCoinsEl = document.getElementById('totalCoins');
+                    if (totalCoinsEl) {
+                        totalCoinsEl.textContent = data.total_coins;
+                    }
+                    const whaleSignalsEl = document.getElementById('whaleSignals');
+                    if (whaleSignalsEl) {
+                        whaleSignalsEl.textContent = data.accumulation_count;
+                    }
                 } else {
-                    cashflowContent.innerHTML = `<div class="error">❌ Hata: ${data.message}</div>`;
-                    accumulationContent.innerHTML = `<div class="error">❌ Hata: ${data.message}</div>`;
+                    if (cashflowContent) {
+                        cashflowContent.innerHTML = `<div class="error">❌ Hata: ${data.message}</div>`;
+                    }
+                    if (accumulationContent) {
+                        accumulationContent.innerHTML = `<div class="error">❌ Hata: ${data.message}</div>`;
+                    }
                 }
             } catch (error) {
-                cashflowContent.innerHTML = `<div class="error">❌ Bağlantı hatası: ${error.message}</div>`;
-                accumulationContent.innerHTML = `<div class="error">❌ Bağlantı hatası: ${error.message}</div>`;
+                if (cashflowContent) {
+                    cashflowContent.innerHTML = `<div class="error">❌ Bağlantı hatası: ${error.message}</div>`;
+                }
+                if (accumulationContent) {
+                    accumulationContent.innerHTML = `<div class="error">❌ Bağlantı hatası: ${error.message}</div>`;
+                }
             } finally {
-                // Loading gizle
-                loading.classList.remove('active');
-                cashflowContent.style.display = 'block';
-                accumulationContent.style.display = 'block';
+                // Loading gizle (null-safe)
+                if (loading) {
+                    loading.classList.remove('active');
+                }
+                if (cashflowContent) {
+                    cashflowContent.style.display = 'block';
+                }
+                if (accumulationContent) {
+                    accumulationContent.style.display = 'block';
+                }
 
-                // Butonu aktif et
-                refreshBtn.disabled = false;
-                refreshBtn.innerHTML = '🔄 Yenile';
+                // Butonu aktif et (null-safe)
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 Yenile';
+                }
             }
         }
 
         // Otomatik yenileme başlat
         function startAutoRefresh() {
-            const interval = parseInt(document.getElementById('autoInterval').value) * 1000;
+            const autoIntervalEl = document.getElementById('autoInterval');
+            const interval = autoIntervalEl ? parseInt(autoIntervalEl.value) * 1000 : 300000; // Default 5 min
             autoRefreshTimer = setInterval(refreshData, interval);
             autoRefreshActive = true;
 
             const btn = document.querySelector('.btn-auto');
-            btn.classList.add('active');
-            btn.innerHTML = '⏸️ Otomatik Yenilemeyi Durdur';
+            if (btn) {
+                btn.classList.add('active');
+                btn.innerHTML = '⏸️ Otomatik Yenilemeyi Durdur';
+            }
         }
 
         // Otomatik yenileme durdur
@@ -1212,8 +1274,10 @@ HTML_TEMPLATE = """
             autoRefreshActive = false;
 
             const btn = document.querySelector('.btn-auto');
-            btn.classList.remove('active');
-            btn.innerHTML = '⏰ Otomatik Yenileme';
+            if (btn) {
+                btn.classList.remove('active');
+                btn.innerHTML = '⏰ Otomatik Yenileme';
+            }
         }
 
         // Otomatik yenileme toggle
