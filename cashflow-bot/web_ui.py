@@ -593,8 +593,9 @@ HTML_TEMPLATE = """
             // Sinyalleri temizle
             accumulationSignals = [];
 
-            // Coin sayısı kontrolü
-            const maxCoins = parseInt(document.getElementById('maxCoins').value);
+            // Coin sayısı kontrolü (null-safe)
+            const maxCoinsElement = document.getElementById('maxCoins');
+            const maxCoins = maxCoinsElement ? parseInt(maxCoinsElement.value) : 0;
             const scanMessage = maxCoins === 0 ? 'TÜM Binance Coinleri' : `Top ${maxCoins} Coin`;
 
             // İlk mesaj
@@ -607,14 +608,20 @@ HTML_TEMPLATE = """
                 </div>
             `;
 
-            // EventSource oluştur
+            // EventSource oluştur (null-safe parameters)
+            const volumeThresholdEl = document.getElementById('volumeThreshold');
+            const priceThresholdEl = document.getElementById('priceThreshold');
+            const buyPressureMinEl = document.getElementById('buyPressureMin');
+            const buyPressureMaxEl = document.getElementById('buyPressureMax');
+            const tradeThresholdEl = document.getElementById('tradeThreshold');
+
             const params = new URLSearchParams({
                 max_coins: maxCoins,
-                volume_threshold: document.getElementById('volumeThreshold').value,
-                price_threshold: document.getElementById('priceThreshold').value,
-                buy_pressure_min: document.getElementById('buyPressureMin').value,
-                buy_pressure_max: document.getElementById('buyPressureMax').value,
-                trade_threshold: document.getElementById('tradeThreshold').value
+                volume_threshold: volumeThresholdEl ? volumeThresholdEl.value : 50,
+                price_threshold: priceThresholdEl ? priceThresholdEl.value : 5,
+                buy_pressure_min: buyPressureMinEl ? buyPressureMinEl.value : 52,
+                buy_pressure_max: buyPressureMaxEl ? buyPressureMaxEl.value : 60,
+                trade_threshold: tradeThresholdEl ? tradeThresholdEl.value : 30
             });
 
             currentEventSource = new EventSource(`/api/scan_stream?${params}`);
@@ -1069,13 +1076,21 @@ HTML_TEMPLATE = """
             accumulationContent.style.display = 'none';
 
             try {
+                // Null-safe element access
+                const topNEl = document.getElementById('topN');
+                const volumeThresholdEl = document.getElementById('volumeThreshold');
+                const priceThresholdEl = document.getElementById('priceThreshold');
+                const buyPressureMinEl = document.getElementById('buyPressureMin');
+                const buyPressureMaxEl = document.getElementById('buyPressureMax');
+                const tradeThresholdEl = document.getElementById('tradeThreshold');
+
                 const params = new URLSearchParams({
-                    top_n: document.getElementById('topN').value,
-                    volume_threshold: document.getElementById('volumeThreshold').value,
-                    price_threshold: document.getElementById('priceThreshold').value,
-                    buy_pressure_min: document.getElementById('buyPressureMin').value,
-                    buy_pressure_max: document.getElementById('buyPressureMax').value,
-                    trade_threshold: document.getElementById('tradeThreshold').value
+                    top_n: topNEl ? topNEl.value : 30,
+                    volume_threshold: volumeThresholdEl ? volumeThresholdEl.value : 50,
+                    price_threshold: priceThresholdEl ? priceThresholdEl.value : 5,
+                    buy_pressure_min: buyPressureMinEl ? buyPressureMinEl.value : 52,
+                    buy_pressure_max: buyPressureMaxEl ? buyPressureMaxEl.value : 60,
+                    trade_threshold: tradeThresholdEl ? tradeThresholdEl.value : 30
                 });
 
                 const response = await fetch(`/api/refresh?${params}`);
