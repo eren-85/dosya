@@ -1174,10 +1174,8 @@ HTML_TEMPLATE = """
         // Sayfa yüklendiğinde ayarları yükle
         loadSettings();
 
-        // İlk veriyi otomatik yükle
-        window.addEventListener('load', () => {
-            refreshData();
-        });
+        // İlk veri yüklemesi manuel - Kullanıcı "Yenile" butonuna basacak
+        // Otomatik yükleme kaldırıldı (takılma sorunu)
     </script>
 </body>
 </html>
