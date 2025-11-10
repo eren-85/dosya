@@ -528,26 +528,44 @@ HTML_TEMPLATE = """
 
         // Ayarları localStorage'dan yükle
         function loadSettings() {
-            document.getElementById('topN').value = localStorage.getItem('topN') || '30';
-            document.getElementById('autoInterval').value = localStorage.getItem('autoInterval') || '300';
-            document.getElementById('maxCoins').value = localStorage.getItem('maxCoins') || '0';
-            document.getElementById('volumeThreshold').value = localStorage.getItem('volumeThreshold') || '50';
-            document.getElementById('priceThreshold').value = localStorage.getItem('priceThreshold') || '5';
-            document.getElementById('buyPressureMin').value = localStorage.getItem('buyPressureMin') || '52';
-            document.getElementById('buyPressureMax').value = localStorage.getItem('buyPressureMax') || '60';
-            document.getElementById('tradeThreshold').value = localStorage.getItem('tradeThreshold') || '30';
+            const topN = document.getElementById('topN');
+            const autoInterval = document.getElementById('autoInterval');
+            const maxCoins = document.getElementById('maxCoins');
+            const volumeThreshold = document.getElementById('volumeThreshold');
+            const priceThreshold = document.getElementById('priceThreshold');
+            const buyPressureMin = document.getElementById('buyPressureMin');
+            const buyPressureMax = document.getElementById('buyPressureMax');
+            const tradeThreshold = document.getElementById('tradeThreshold');
+
+            if (topN) topN.value = localStorage.getItem('topN') || '30';
+            if (autoInterval) autoInterval.value = localStorage.getItem('autoInterval') || '300';
+            if (maxCoins) maxCoins.value = localStorage.getItem('maxCoins') || '0';
+            if (volumeThreshold) volumeThreshold.value = localStorage.getItem('volumeThreshold') || '50';
+            if (priceThreshold) priceThreshold.value = localStorage.getItem('priceThreshold') || '5';
+            if (buyPressureMin) buyPressureMin.value = localStorage.getItem('buyPressureMin') || '52';
+            if (buyPressureMax) buyPressureMax.value = localStorage.getItem('buyPressureMax') || '60';
+            if (tradeThreshold) tradeThreshold.value = localStorage.getItem('tradeThreshold') || '30';
         }
 
         // Ayarları kaydet
         function saveSettings() {
-            localStorage.setItem('topN', document.getElementById('topN').value);
-            localStorage.setItem('autoInterval', document.getElementById('autoInterval').value);
-            localStorage.setItem('maxCoins', document.getElementById('maxCoins').value);
-            localStorage.setItem('volumeThreshold', document.getElementById('volumeThreshold').value);
-            localStorage.setItem('priceThreshold', document.getElementById('priceThreshold').value);
-            localStorage.setItem('buyPressureMin', document.getElementById('buyPressureMin').value);
-            localStorage.setItem('buyPressureMax', document.getElementById('buyPressureMax').value);
-            localStorage.setItem('tradeThreshold', document.getElementById('tradeThreshold').value);
+            const topN = document.getElementById('topN');
+            const autoInterval = document.getElementById('autoInterval');
+            const maxCoins = document.getElementById('maxCoins');
+            const volumeThreshold = document.getElementById('volumeThreshold');
+            const priceThreshold = document.getElementById('priceThreshold');
+            const buyPressureMin = document.getElementById('buyPressureMin');
+            const buyPressureMax = document.getElementById('buyPressureMax');
+            const tradeThreshold = document.getElementById('tradeThreshold');
+
+            if (topN) localStorage.setItem('topN', topN.value);
+            if (autoInterval) localStorage.setItem('autoInterval', autoInterval.value);
+            if (maxCoins) localStorage.setItem('maxCoins', maxCoins.value);
+            if (volumeThreshold) localStorage.setItem('volumeThreshold', volumeThreshold.value);
+            if (priceThreshold) localStorage.setItem('priceThreshold', priceThreshold.value);
+            if (buyPressureMin) localStorage.setItem('buyPressureMin', buyPressureMin.value);
+            if (buyPressureMax) localStorage.setItem('buyPressureMax', buyPressureMax.value);
+            if (tradeThreshold) localStorage.setItem('tradeThreshold', tradeThreshold.value);
         }
 
         // Veri yenile
@@ -666,7 +684,7 @@ HTML_TEMPLATE = """
                 const positionLabel = pricePos < 30 ? '🟢DİP' : pricePos < 60 ? '🟡ORTA' : '🔴TEPE';
 
                 html += `
-                    <div class="accumulation-card ${highScore ? 'high-score' : ''}" style="animation: slideIn 0.3s ease; cursor: pointer;" onclick="showCoinAnalysis('${signal.symbol}', ${JSON.stringify(signal).replace(/"/g, '&quot;')})">
+                    <div class="accumulation-card ${highScore ? 'high-score' : ''}" style="animation: slideIn 0.3s ease; cursor: pointer;" onclick="showCoinAnalysis(${index})">
                         <div style="position: absolute; top: 10px; right: 10px; font-size: 12px; color: #888;">#${index + 1}</div>
                         <h3>${signal.symbol} 👆</h3>
                         <div class="score">${signal.accumulation_score.toFixed(1)}/100 ⭐</div>
@@ -801,7 +819,13 @@ HTML_TEMPLATE = """
         }
 
         // Coin analizi modal göster
-        function showCoinAnalysis(symbol, signal) {
+        function showCoinAnalysis(index) {
+            // Signal'i array'den al
+            const signal = accumulationSignals[index];
+            if (!signal) return;
+
+            const symbol = signal.symbol;
+
             // Analiz yap
             const analysis = analyzeCoin(signal);
 
