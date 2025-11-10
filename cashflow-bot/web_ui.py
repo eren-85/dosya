@@ -650,9 +650,9 @@ HTML_TEMPLATE = """
                 const positionLabel = pricePos < 30 ? '🟢DİP' : pricePos < 60 ? '🟡ORTA' : '🔴TEPE';
 
                 html += `
-                    <div class="accumulation-card ${highScore ? 'high-score' : ''}" style="animation: slideIn 0.3s ease;">
+                    <div class="accumulation-card ${highScore ? 'high-score' : ''}" style="animation: slideIn 0.3s ease; cursor: pointer;" onclick="showCoinAnalysis('${signal.symbol}', ${JSON.stringify(signal).replace(/"/g, '&quot;')})">
                         <div style="position: absolute; top: 10px; right: 10px; font-size: 12px; color: #888;">#${index + 1}</div>
-                        <h3>${signal.symbol}</h3>
+                        <h3>${signal.symbol} 👆</h3>
                         <div class="score">${signal.accumulation_score.toFixed(1)}/100 ⭐</div>
                         <div class="metrics">
                             <div class="metric">
@@ -696,6 +696,311 @@ HTML_TEMPLATE = """
             });
 
             container.innerHTML = html;
+
+            // Metrik açıklamalarını en alta ekle
+            const explanationHTML = `
+                <div style="margin-top: 40px; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">📚 Metrik Açıklamaları</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">📊 Hacim (Volume)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Son 24 saatte bu coin için yapılan toplam işlem hacmi (USD bazında).
+                                Yüksek hacim = Yüksek likidite ve ilgi.
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">📈 Vol Artış (Volume Increase)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Son 24h hacminin 7 günlük ortalamaya göre % artışı.
+                                >100% = Anormal hacim patlaması (whale aktivitesi olabilir!)
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">💰 Fiyat 30d (Price 30 Days)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Son 30 gündeki fiyat değişim yüzdesi.
+                                Negatif değer = Fiyat düşüyor (dipte olabilir).
+                                >30% = Zaten pompalandı (dikkat!)
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">🎯 Pozisyon (Price Position)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Mevcut fiyatın 30 günlük min-max aralığındaki konumu (0-100%).
+                                <br>🟢 0-30% = Dipte (ideal alım bölgesi)
+                                <br>🟡 30-70% = Orta
+                                <br>🔴 70-100% = Tepede (risk!)
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">💵 Fiyat 24h (Price 24h)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Son 24 saatteki fiyat değişimi.
+                                Akümülasyon için ideal: ±5% arası (yatay hareket).
+                                Whale'ler dikkat çekmeden topluyor!
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">🟢 Alım (Buy Pressure)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Toplam hacmin ne kadarı ALIM emri (%).
+                                52-58% = İdeal gizli akümülasyon!
+                                >60% = Çok belirgin (FOMO olabilir)
+                                <50% = Satış baskısı var
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">🔥 Trade (Trade Count Increase)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                İşlem sayısındaki artış (son 24h vs 7 gün ort.).
+                                >30% = Aktivite artıyor (whale girişi?)
+                                Negatif = İlgi azalıyor (dikkat!)
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">📊 OBV (On-Balance Volume)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Hacim akış yönü göstergesi.
+                                <br>UP 🔼 = Hacim ALIM yönünde (güçlü!)
+                                <br>DOWN 🔻 = Hacim SATIM yönünde (zayıf)
+                                OBV UP olan coinler tercih edilir.
+                            </p>
+                        </div>
+                        <div style="padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <h4 style="color: #3b82f6; margin-bottom: 10px;">⭐ Skor (Accumulation Score)</h4>
+                            <p style="font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Tüm kriterlerin toplamı (0-100+).
+                                <br>90-100+ = Çok güçlü sinyal!
+                                <br>70-90 = İyi sinyal
+                                <br>60-70 = Orta seviye
+                                <br><60 = Zayıf (filtrelenir)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('beforeend', explanationHTML);
+        }
+
+        // Coin analizi modal göster
+        function showCoinAnalysis(symbol, signal) {
+            // Analiz yap
+            const analysis = analyzeCoin(signal);
+
+            // Modal oluştur
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.2s ease;
+            `;
+
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    border-radius: 16px;
+                    padding: 40px;
+                    max-width: 600px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                        <h2 style="color: #667eea; margin: 0;">🔍 ${symbol} Analizi</h2>
+                        <button onclick="this.closest('[style*=fixed]').remove()" style="
+                            background: #ef4444;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 8px 16px;
+                            cursor: pointer;
+                            font-size: 14px;
+                        ">✕ Kapat</button>
+                    </div>
+
+                    <div style="margin-bottom: 25px; padding: 20px; background: ${analysis.strengthColor}15; border-left: 4px solid ${analysis.strengthColor}; border-radius: 8px;">
+                        <div style="font-size: 18px; font-weight: bold; color: ${analysis.strengthColor}; margin-bottom: 10px;">
+                            ${analysis.strength} - Skor: ${signal.accumulation_score.toFixed(1)}/100
+                        </div>
+                        <div style="font-size: 14px; color: #64748b;">
+                            ${analysis.summary}
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #3b82f6; margin-bottom: 15px;">💡 Detaylı Değerlendirme</h3>
+                        <div style="font-size: 14px; line-height: 1.8; color: #334155;">
+                            ${analysis.details}
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #3b82f6; margin-bottom: 15px;">✅ Güçlü Yönler</h3>
+                        <ul style="margin: 0; padding-left: 20px; color: #10b981;">
+                            ${analysis.strengths.map(s => `<li style="margin-bottom: 8px;">${s}</li>`).join('')}
+                        </ul>
+                    </div>
+
+                    ${analysis.weaknesses.length > 0 ? `
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #3b82f6; margin-bottom: 15px;">⚠️ Riskler</h3>
+                        <ul style="margin: 0; padding-left: 20px; color: #ef4444;">
+                            ${analysis.weaknesses.map(w => `<li style="margin-bottom: 8px;">${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    <div style="padding: 20px; background: #f8fafc; border-radius: 8px; margin-top: 25px;">
+                        <h3 style="color: #3b82f6; margin-bottom: 15px;">🎯 Tavsiye</h3>
+                        <div style="font-size: 14px; line-height: 1.8; color: #334155; font-weight: 500;">
+                            ${analysis.recommendation}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+        }
+
+        // Coin analizini yap
+        function analyzeCoin(signal) {
+            const score = signal.accumulation_score;
+            const pricePos = signal.price_position || 50;
+            const priceChange30d = signal.price_change_30d || 0;
+            const volIncrease = signal.volume_increase;
+            const buyPressure = signal.buy_pressure;
+            const obvTrend = signal.obv_trend;
+
+            const strengths = [];
+            const weaknesses = [];
+            let strength = '';
+            let strengthColor = '';
+            let summary = '';
+            let details = '';
+            let recommendation = '';
+
+            // Skor bazlı değerlendirme
+            if (score >= 95) {
+                strength = '🔥 ÇOK GÜÇLÜ SİNYAL';
+                strengthColor = '#10b981';
+                summary = 'Bu coin tüm akümülasyon kriterlerini başarıyla geçiyor. Whale aktivitesi çok net!';
+            } else if (score >= 80) {
+                strength = '✅ GÜÇLÜ SİNYAL';
+                strengthColor = '#3b82f6';
+                summary = 'Güçlü bir akümülasyon sinyali. Whale toplama ihtimali yüksek.';
+            } else if (score >= 70) {
+                strength = '🟡 ORTA SİNYAL';
+                strengthColor = '#f59e0b';
+                summary = 'Orta seviye akümülasyon sinyali. Dikkatli yaklaşın.';
+            } else {
+                strength = '⚪ ZAYIF SİNYAL';
+                strengthColor = '#94a3b8';
+                summary = 'Zayıf sinyal. Daha güçlü fırsatlar bekleyin.';
+            }
+
+            // Pozisyon analizi
+            if (pricePos < 20) {
+                strengths.push(`Fiyat çok dipte (%${pricePos.toFixed(0)}) - İdeal giriş bölgesi!`);
+            } else if (pricePos < 40) {
+                strengths.push(`Fiyat dip bölgesinde (%${pricePos.toFixed(0)}) - İyi giriş fırsatı`);
+            } else if (pricePos > 70) {
+                weaknesses.push(`Fiyat tepede (%${pricePos.toFixed(0)}) - Risk yüksek!`);
+            }
+
+            // 30 günlük fiyat değişimi
+            if (priceChange30d < -20) {
+                strengths.push(`30 günde %${Math.abs(priceChange30d).toFixed(1)} düşmüş - Düşük riskli giriş`);
+            } else if (priceChange30d > 30) {
+                weaknesses.push(`30 günde %${priceChange30d.toFixed(1)} artmış - Zaten pompalanmış olabilir`);
+            }
+
+            // Hacim artışı
+            if (volIncrease > 200) {
+                strengths.push(`Hacim %${volIncrease.toFixed(0)} artmış - Whale hareketi olabilir!`);
+            } else if (volIncrease > 100) {
+                strengths.push(`Hacim %${volIncrease.toFixed(0)} artmış - Güçlü ilgi var`);
+            } else if (volIncrease < 30) {
+                weaknesses.push(`Hacim artışı zayıf (%${volIncrease.toFixed(0)})`);
+            }
+
+            // Alım baskısı
+            if (buyPressure >= 52 && buyPressure <= 58) {
+                strengths.push(`İdeal gizli alım baskısı (%${buyPressure.toFixed(1)}) - Whale toplama ihtimali yüksek`);
+            } else if (buyPressure > 58) {
+                weaknesses.push(`Alım baskısı çok yüksek (%${buyPressure.toFixed(1)}) - FOMO olabilir`);
+            } else if (buyPressure < 50) {
+                weaknesses.push(`Alım baskısı zayıf (%${buyPressure.toFixed(1)}) - Satış baskısı var`);
+            }
+
+            // OBV
+            if (obvTrend === 'UP') {
+                strengths.push('OBV yukarı yönlü - Hacim akışı pozitif');
+            } else {
+                weaknesses.push('OBV aşağı yönlü - Hacim akışı negatif');
+            }
+
+            // Detaylı açıklama oluştur
+            details = `
+                <strong>Fiyat Konumu:</strong> Coin şu anda 30 günlük fiyat aralığının %${pricePos.toFixed(0)}'inde işlem görüyor.
+                ${pricePos < 30 ? 'Bu dip bölgesidir ve giriş için ideal.' : pricePos > 70 ? 'Bu tepe bölgesidir, dikkatli olun!' : 'Bu orta bölgedir.'}
+                <br><br>
+                <strong>Hacim Analizi:</strong> Son 24 saatte hacim 7 günlük ortalamaya göre %${volIncrease.toFixed(1)} arttı.
+                ${volIncrease > 100 ? 'Bu anormal bir hacim patlamasıdır ve büyük oyuncuların pozisyon aldığını gösterebilir.' : 'Normal hacim akışı.'}
+                <br><br>
+                <strong>Akümülasyon Göstergeleri:</strong> Alım baskısı %${buyPressure.toFixed(1)} seviyesinde.
+                ${buyPressure >= 52 && buyPressure <= 58 ? 'Bu, whale\'lerin dikkat çekmeden gizlice topladığını gösterebilir.' : ''}
+            `;
+
+            // Tavsiye oluştur
+            if (score >= 85 && pricePos < 40 && obvTrend === 'UP') {
+                recommendation = `
+                    <strong style="color: #10b981;">✅ GÜÇLÜ ALIM FIRSATı!</strong><br><br>
+                    Bu coin güçlü akümülasyon göstergeleri sergiliyor. Ancak:<br>
+                    • Kendi araştırmanızı yapın (DYOR)<br>
+                    • Stop-loss belirleyin (örn. %${pricePos > 20 ? '10' : '15'} altında)<br>
+                    • Portföyünüzün küçük bir kısmıyla girin<br>
+                    • Hacim patlaması/breakout bekleyin<br><br>
+                    <em>Risk Yönetimi: Her zaman dikkatli olun ve yatırım tavsiyesi değildir!</em>
+                `;
+            } else if (score >= 70 && weaknesses.length <= 2) {
+                recommendation = `
+                    <strong style="color: #3b82f6;">🟡 DİKKATLİ GİRİŞ ÖNERİSİ</strong><br><br>
+                    Orta seviye bir fırsat. Girmek istiyorsanız:<br>
+                    • Daha fazla onay bekleyin (grafik formasyonu vb.)<br>
+                    • Küçük pozisyonla başlayın<br>
+                    • Sıkı stop-loss kullanın<br><br>
+                    ${weaknesses.length > 0 ? `<strong>Dikkat!</strong> ${weaknesses[0]}` : ''}
+                `;
+            } else {
+                recommendation = `
+                    <strong style="color: #f59e0b;">⚠️ BEKLE VE İZLE</strong><br><br>
+                    Bu coin şu an için yeterince güçlü değil. Tavsiye:<br>
+                    • Daha güçlü sinyaller bekleyin<br>
+                    • Watch list'e ekleyip takip edin<br>
+                    • Daha iyi fırsatlar arayın<br><br>
+                    ${weaknesses.length > 0 ? `<strong>Sorunlar:</strong><br>• ${weaknesses.join('<br>• ')}` : ''}
+                `;
+            }
+
+            return {
+                strength,
+                strengthColor,
+                summary,
+                details,
+                strengths,
+                weaknesses,
+                recommendation
+            };
         }
 
         async function refreshData() {

@@ -691,6 +691,7 @@ class CashFlowAnalyzer:
                 <thead>
                     <tr>
                         <th>Coin</th>
+                        <th>Fiyat</th>
                         <th>Nakit Payı</th>
                         <th>15m %</th>
                         <th>MTS</th>
@@ -738,7 +739,6 @@ class CashFlowAnalyzer:
                     <tr>
                         <td class="tooltip">
                             <span class="coin-symbol">{sym}</span>
-                            <span style="font-size: 12px; color: #64748b; margin-left: 8px;">{price_str}</span>
                             <span class="tooltiptext">
                                 <strong>{coin['symbol']}</strong><br>
                                 Fiyat: {price_str}<br>
@@ -747,6 +747,7 @@ class CashFlowAnalyzer:
                                 Momentum: {coin['momentum']:.2f}X
                             </span>
                         </td>
+                        <td><strong style="color: #3b82f6;">{price_str}</strong></td>
                         <td><strong>{coin['cash_share']:.1f}%</strong></td>
                         <td class="{'positive' if coin['buyer_15m'] >= 50 else 'negative'}">
                             <strong>{coin['buyer_15m']:.1f}%</strong>
